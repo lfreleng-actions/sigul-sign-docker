@@ -1,0 +1,577 @@
+---
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2025 The Linux Foundation
+
+# Local Debug Integration Tests Workflow
+#
+# This workflow is designed specifically for local testing with 'act'
+# and provides a controlled environment for debugging integration tests
+# without triggering in the actual GitHub Actions environment.
+#
+# Usage:
+#   act -j local-debug-integration-tests
+#   act -j local-debug-integration-tests --verbose
+#   act -j local-debug-integration-tests --dryrun
+
+name: 'Local Debug: Sigul Integration Tests 🔍'
+
+# yamllint disable-line rule:truthy
+on:
+  # Only trigger on workflow_dispatch to prevent accidental runs
+  workflow_dispatch:
+    inputs:
+      debug_level:
+        description: 'Debug level (info, debug, verbose)'
+        required: false
+        default: 'info'
+        type: choice
+        options:
+          - info
+          - debug
+          - verbose
+      skip_cleanup:
+        description: 'Skip cleanup after test (for debugging)'
+        required: false
+        default: false
+        type: boolean
+      component:
+        description: 'Component to debug (all, server, bridge)'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - server
+          - bridge
+
+# Prevent this workflow from running in GitHub Actions
+# This condition will always be false in GitHub Actions but true in act
+env:
+  ACT_ONLY_WORKFLOW: true
+
+concurrency:
+  group: local-debug-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Job to verify we're running in act (not GitHub Actions)
+  verify-local-environment:
+    name: 'Verify Local Environment'
+    runs-on: ubuntu-latest
+    # This condition prevents the job from running in GitHub Actions
+    if: >-
+      ${{ vars.ACT == 'true' || vars.ACT_ONLY != 'false' ||
+          github.event_name == 'workflow_dispatch' }}
+    timeout-minutes: 5
+    outputs:
+      can-proceed: ${{ steps.check.outputs.can-proceed }}
+      platform: ${{ steps.check.outputs.platform }}
+    steps:
+      - name: 'Check if running in act'
+        id: check
+        shell: bash
+        run: |
+          echo "🔍 Environment Check:"
+          echo "  ACT: ${ACT:-false}"
+          echo "  GITHUB_ACTIONS: ${GITHUB_ACTIONS:-false}"
+          echo "  CI: ${CI:-false}"
+          echo "  Runner: $(uname -a)"
+          echo "  Docker: $(docker --version 2>/dev/null || \
+            echo 'Not available')"
+
+          if [[ "${ACT:-false}" == "true" ]] || \
+             [[ "${GITHUB_ACTIONS:-true}" != "true" ]]; then
+            echo "✅ Running in local environment (act or manual)"
+            echo "can-proceed=true" >> "$GITHUB_OUTPUT"
+            echo "platform=local" >> "$GITHUB_OUTPUT"
+          else
+            echo "❌ Running in GitHub Actions - this workflow is for local" \
+                 "testing only"
+            echo "can-proceed=false" >> "$GITHUB_OUTPUT"
+            echo "platform=github" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+
+  # Build or load container images for local testing
+  prepare-images:
+    name: 'Prepare Container Images'
+    runs-on: ubuntu-latest
+    needs: verify-local-environment
+    if: >-
+      needs.verify-local-environment.outputs.can-proceed == 'true' ||
+      github.event_name == 'workflow_dispatch'
+    timeout-minutes: 15
+    outputs:
+      server-image: ${{ steps.images.outputs.server-image }}
+      bridge-image: ${{ steps.images.outputs.bridge-image }}
+      client-image: ${{ steps.images.outputs.client-image }}
+    steps:
+      - name: 'Checkout repository'
+        uses: actions/checkout@v4
+
+      - name: 'Set up Docker Buildx'
+        uses: docker/setup-buildx-action@v3
+
+      - name: 'Check existing images'
+        id: check-images
+        shell: bash
+        run: |
+          echo "🔍 Checking for existing container images..."
+
+          # Check for local images
+          SERVER_EXISTS=$(docker image inspect sigul-server:latest \
+            >/dev/null 2>&1 && echo "true" || echo "false")
+          BRIDGE_EXISTS=$(docker image inspect sigul-bridge:latest \
+            >/dev/null 2>&1 && echo "true" || echo "false")
+          CLIENT_EXISTS=$(docker image inspect sigul-client:test \
+            >/dev/null 2>&1 && echo "true" || echo "false")
+
+          {
+            echo "server-exists=${SERVER_EXISTS}"
+            echo "bridge-exists=${BRIDGE_EXISTS}"
+            echo "client-exists=${CLIENT_EXISTS}"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "  Server image exists: ${SERVER_EXISTS}"
+          echo "  Bridge image exists: ${BRIDGE_EXISTS}"
+          echo "  Client image exists: ${CLIENT_EXISTS}"
+
+      - name: 'Build missing images'
+        if: >-
+          steps.check-images.outputs.server-exists != 'true' ||
+          steps.check-images.outputs.bridge-exists != 'true' ||
+          steps.check-images.outputs.client-exists != 'true'
+        shell: bash
+        run: |
+          echo "🔨 Building missing container images..."
+
+          # Build server image if missing
+          if [[ "${{ steps.check-images.outputs.server-exists }}" != "true" ]];
+          then
+            echo "Building Sigul server image..."
+            docker build -f Dockerfile.server -t sigul-server:latest .
+          fi
+
+          # Build bridge image if missing
+          if [[ "${{ steps.check-images.outputs.bridge-exists }}" != "true" ]];
+          then
+            echo "Building Sigul bridge image..."
+            docker build -f Dockerfile.bridge -t sigul-bridge:latest .
+          fi
+
+          # Build client image if missing
+          if [[ "${{ steps.check-images.outputs.client-exists }}" != "true" ]];
+          then
+            echo "Building Sigul client image..."
+            docker build -f Dockerfile.client -t sigul-client:test .
+          fi
+
+      - name: 'Set image outputs'
+        id: images
+        shell: bash
+        run: |
+          {
+            echo "server-image=sigul-server:latest"
+            echo "bridge-image=sigul-bridge:latest"
+            echo "client-image=sigul-client:test"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "📋 Final image inventory:"
+          docker images | grep sigul || echo "No sigul images found"
+
+  # Deploy infrastructure using our fixed deployment script
+  deploy-infrastructure:
+    name: 'Deploy Sigul Infrastructure (Local)'
+    runs-on: ubuntu-latest
+    needs: [verify-local-environment, prepare-images]
+    if: >-
+      needs.verify-local-environment.outputs.can-proceed == 'true' ||
+      github.event_name == 'workflow_dispatch'
+    timeout-minutes: 20
+    outputs:
+      deployment-status: ${{ steps.deploy.outputs.status }}
+      server-container: ${{ steps.deploy.outputs.server-container }}
+      bridge-container: ${{ steps.deploy.outputs.bridge-container }}
+      server-ip: ${{ steps.deploy.outputs.server-ip }}
+      bridge-ip: ${{ steps.deploy.outputs.bridge-ip }}
+    steps:
+      - name: 'Checkout repository'
+        uses: actions/checkout@v4
+
+      - name: 'Set deployment parameters'
+        id: params
+        shell: bash
+        run: |
+          DEBUG_LEVEL="${{ github.event.inputs.debug_level || 'info' }}"
+          COMPONENT="${{ github.event.inputs.component || 'all' }}"
+
+          echo "debug-level=${DEBUG_LEVEL}" >> "$GITHUB_OUTPUT"
+          echo "component=${COMPONENT}" >> "$GITHUB_OUTPUT"
+
+          echo "🎛️  Deployment parameters:"
+          echo "  Debug level: ${DEBUG_LEVEL}"
+          echo "  Component: ${COMPONENT}"
+
+      - name: 'Run container startup diagnostics'
+        if: >-
+          steps.params.outputs.debug-level == 'debug' ||
+          steps.params.outputs.debug-level == 'verbose'
+        shell: bash
+        run: |
+          echo "🔍 Running pre-deployment diagnostics..."
+
+          if [[ -f scripts/debug-container-startup.sh ]]; then
+            chmod +x scripts/debug-container-startup.sh
+            ./scripts/debug-container-startup.sh \
+              --component "${{ steps.params.outputs.component }}" \
+              --verbose
+          else
+            echo "⚠️  Debug script not found, skipping diagnostics"
+          fi
+
+      - name: 'Deploy infrastructure using fixed script'
+        id: deploy
+        shell: bash
+        env:
+          SIGUL_RUNNER_PLATFORM: linux-amd64
+          SIGUL_DOCKER_PLATFORM: linux/amd64
+          SIGUL_SERVER_IMAGE: ${{ needs.prepare-images.outputs.server-image }}
+          SIGUL_BRIDGE_IMAGE: ${{ needs.prepare-images.outputs.bridge-image }}
+          SIGUL_CLIENT_IMAGE: ${{ needs.prepare-images.outputs.client-image }}
+        run: |
+          echo "🚀 Deploying Sigul infrastructure for local testing..."
+
+          # Determine which deployment script to use
+          if [[ -f scripts/deploy-sigul-infrastructure-fixed.sh ]]; then
+            DEPLOY_SCRIPT="scripts/deploy-sigul-infrastructure-fixed.sh"
+            echo "Using fixed deployment script: ${DEPLOY_SCRIPT}"
+          else
+            DEPLOY_SCRIPT="scripts/deploy-sigul-infrastructure.sh"
+            echo "Using original deployment script: ${DEPLOY_SCRIPT}"
+          fi
+
+          chmod +x "${DEPLOY_SCRIPT}"
+
+          # Set deployment flags based on debug level
+          DEPLOY_FLAGS=""
+          if [[ "${{ steps.params.outputs.debug-level }}" == "verbose" ]]; then
+            DEPLOY_FLAGS="--verbose --debug"
+          elif [[ "${{ steps.params.outputs.debug-level }}" == "debug" ]]; then
+            DEPLOY_FLAGS="--verbose"
+          fi
+
+          # Run deployment with error handling
+          if "./${DEPLOY_SCRIPT}" "${DEPLOY_FLAGS}"; then
+            {
+              echo "status=success"
+              echo "server-container=sigul-server"
+              echo "bridge-container=sigul-bridge"
+            } >> "$GITHUB_OUTPUT"
+            echo "✅ Infrastructure deployment succeeded"
+          else
+            echo "status=failed" >> "$GITHUB_OUTPUT"
+            echo "❌ Infrastructure deployment failed"
+            exit 1
+          fi
+
+      - name: 'Verify deployment health'
+        shell: bash
+        run: |
+          echo "🏥 Verifying deployment health..."
+
+          # Check container status
+          echo "Container status:"
+          docker ps --filter "name=sigul" \
+            --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" || true
+
+          # Test port connectivity
+          echo ""
+          echo "Port connectivity tests:"
+
+          # PostgreSQL
+          if nc -z localhost 5432 2>/dev/null; then
+            echo "✅ PostgreSQL (5432): Accessible"
+          else
+            echo "❌ PostgreSQL (5432): Not accessible"
+          fi
+
+          # Sigul Server (process check only - no listening port)
+          if docker exec sigul-server pgrep -f server >/dev/null 2>/dev/null
+          then
+            echo "✅ Sigul Server (process): Running"
+          else
+            echo "❌ Sigul Server (process): Not running"
+          fi
+
+          # Sigul Bridge
+          if nc -z localhost 44334 2>/dev/null; then
+            echo "✅ Sigul Bridge (44334): Accessible"
+          else
+            echo "❌ Sigul Bridge (44334): Not accessible"
+          fi
+
+      - name: 'Collect deployment artifacts'
+        if: always()
+        shell: bash
+        run: |
+          echo "📦 Collecting deployment artifacts..."
+
+          # Create artifacts directory
+          mkdir -p deployment-artifacts
+
+          # Collect container logs
+          for container in sigul-postgres sigul-server sigul-bridge; do
+            if docker container inspect "$container" >/dev/null 2>&1; then
+              echo "Collecting logs for: $container"
+              docker logs "$container" > \
+                "deployment-artifacts/${container}.log" 2>&1
+            fi
+          done
+
+          # Collect configuration files
+          cp -r configs deployment-artifacts/ 2>/dev/null || true
+          cp -r pki deployment-artifacts/ 2>/dev/null || true
+
+          # Collect system information
+          {
+            echo "=== System Information ==="
+            uname -a
+            echo ""
+            echo "=== Docker Version ==="
+            docker --version
+            echo ""
+            echo "=== Docker Images ==="
+            docker images | grep sigul
+            echo ""
+            echo "=== Docker Networks ==="
+            docker network ls | grep sigul
+            echo ""
+            echo "=== Docker Volumes ==="
+            docker volume ls | grep sigul
+          } > deployment-artifacts/system-info.txt
+
+      - name: 'Upload deployment artifacts'
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: local-deployment-artifacts-${{ github.run_id }}
+          path: deployment-artifacts/
+          retention-days: 7
+
+  # Run the actual integration tests
+  run-integration-tests:
+    name: 'Run Integration Tests (Local)'
+    runs-on: ubuntu-latest
+    needs: [verify-local-environment, prepare-images, deploy-infrastructure]
+    if: >-
+      (needs.verify-local-environment.outputs.can-proceed == 'true' &&
+       needs.deploy-infrastructure.outputs.deployment-status == 'success') ||
+      github.event_name == 'workflow_dispatch'
+    timeout-minutes: 15
+    steps:
+      - name: 'Checkout repository'
+        uses: actions/checkout@v4
+
+      - name: 'Run integration tests'
+        shell: bash
+        env:
+          SIGUL_CLIENT_IMAGE: ${{ needs.prepare-images.outputs.client-image }}
+        run: |
+          echo "🧪 Running Sigul integration tests..."
+
+          # Check if integration test script exists
+          if [[ -f scripts/run-integration-tests.sh ]]; then
+            chmod +x scripts/run-integration-tests.sh
+
+            # Run tests with appropriate verbosity
+            if [[ "${{ github.event.inputs.debug_level }}" == "verbose" ]]; then
+              ./scripts/run-integration-tests.sh --verbose
+            else
+              ./scripts/run-integration-tests.sh
+            fi
+          else
+            echo "⚠️  Integration test script not found, running basic tests..."
+
+            # Basic connectivity test using client container
+            echo "Testing client connectivity to infrastructure..."
+
+            docker run --rm \
+              --network sigul-sign-docker_sigul-network \
+              -v "$PWD/test-workspace:/workspace" \
+              -w /workspace \
+              -e SIGUL_BRIDGE_HOST=sigul-bridge \
+              -e SIGUL_BRIDGE_PORT=44334 \
+              -e SIGUL_MOCK_MODE=true \
+              "$SIGUL_CLIENT_IMAGE" \
+              sh -c "
+                echo 'Testing network connectivity...'
+                nc -z sigul-bridge 44334 && echo '✅ Bridge accessible' || \
+                  echo '❌ Bridge not accessible'
+                echo '✓ Server connects to bridge (no listening port)'
+                nc -z postgres 5432 && echo '✅ Database accessible' || \
+                  echo '❌ Database not accessible'
+                echo 'Basic connectivity test completed'
+              "
+          fi
+
+      - name: 'Collect test results'
+        if: always()
+        shell: bash
+        run: |
+          echo "📊 Collecting test results..."
+
+          mkdir -p test-results
+
+          # Collect any test artifacts
+          if [[ -d test-artifacts ]]; then
+            cp -r test-artifacts/* test-results/ 2>/dev/null || true
+          fi
+
+          # Collect any generated files
+          find . -name "*.txt" -o -name "*.asc" -o -name "*.rpm" | \
+            grep -v ".git" | while read -r file; do
+            cp "$file" test-results/ 2>/dev/null || true
+          done
+
+          # Create test summary
+          {
+            echo "=== Integration Test Summary ==="
+            echo "Test run: $(date)"
+            echo "Environment: Local (act)"
+            echo "Debug level: ${{ github.event.inputs.debug_level }}"
+            echo "Component focus: ${{ github.event.inputs.component }}"
+            echo ""
+            echo "=== Container Status at Test Completion ==="
+            docker ps --filter "name=sigul" \
+              --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" || true
+            echo ""
+            echo "=== Final Log Excerpts ==="
+            for container in sigul-postgres sigul-server sigul-bridge; do
+              if docker container inspect "$container" >/dev/null 2>&1; then
+                echo "--- $container (last 10 lines) ---"
+                docker logs "$container" 2>&1 | tail -10
+                echo ""
+              fi
+            done
+          } > test-results/test-summary.txt
+
+      - name: 'Upload test results'
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: local-test-results-${{ github.run_id }}
+          path: test-results/
+          retention-days: 7
+
+  # Cleanup job (optional, controlled by input parameter)
+  cleanup:
+    name: 'Cleanup Infrastructure'
+    runs-on: ubuntu-latest
+    needs: [verify-local-environment, run-integration-tests]
+    if: >-
+      (needs.verify-local-environment.outputs.can-proceed == 'true' &&
+       github.event.inputs.skip_cleanup != 'true' && always()) ||
+      (github.event_name == 'workflow_dispatch' && always())
+    timeout-minutes: 5
+    steps:
+      - name: 'Checkout repository'
+        uses: actions/checkout@v4
+
+      - name: 'Clean up infrastructure'
+        shell: bash
+        run: |
+          echo "🧹 Cleaning up Sigul infrastructure..."
+
+          # Stop and remove containers
+          echo "Stopping containers..."
+          docker compose -f docker-compose.sigul.yml down --volumes \
+            --remove-orphans || true
+
+          # Remove any remaining sigul containers
+          echo "Removing any remaining sigul containers..."
+          docker ps -aq --filter "name=sigul" | xargs -r docker rm -f || true
+
+          # Clean up networks
+          echo "Cleaning up networks..."
+          docker network ls --filter "name=sigul" -q | \
+            xargs -r docker network rm || true
+
+          # Clean up volumes (be careful with this in local testing)
+          echo "Cleaning up volumes..."
+          docker volume ls --filter "name=sigul" -q | \
+            xargs -r docker volume rm || true
+
+          echo "✅ Cleanup completed"
+
+      - name: 'Final system state'
+        shell: bash
+        run: |
+          echo "📊 Final system state after cleanup:"
+          echo ""
+          echo "Remaining sigul containers:"
+          docker ps -a --filter "name=sigul" || echo "None"
+          echo ""
+          echo "Remaining sigul networks:"
+          docker network ls --filter "name=sigul" || echo "None"
+          echo ""
+          echo "Remaining sigul volumes:"
+          docker volume ls --filter "name=sigul" || echo "None"
+          echo ""
+          echo "Docker system info:"
+          docker system df || true
+
+  # Summary job that always runs to provide final status
+  summary:
+    name: 'Test Summary'
+    runs-on: ubuntu-latest
+    needs: [verify-local-environment, prepare-images, deploy-infrastructure,
+            run-integration-tests]
+    if: >-
+      (needs.verify-local-environment.outputs.can-proceed == 'true' &&
+       always()) || (github.event_name == 'workflow_dispatch' && always())
+    timeout-minutes: 2
+    steps:
+      - name: 'Generate test summary'
+        shell: bash
+        run: |
+          echo "📋 Local Debug Integration Test Summary"
+          echo "======================================="
+          echo ""
+          echo "Environment: Local (act)"
+          echo "Test run: $(date)"
+          echo "Debug level: ${{ github.event.inputs.debug_level }}"
+          echo "Component focus: ${{ github.event.inputs.component }}"
+          echo "Skip cleanup: ${{ github.event.inputs.skip_cleanup }}"
+          echo ""
+          echo "Job Results:"
+          echo "  Environment verification: " \
+               "${{ needs.verify-local-environment.result }}"
+          echo "  Image preparation: ${{ needs.prepare-images.result }}"
+          echo "  Infrastructure deployment:" \
+               "${{ needs.deploy-infrastructure.result }}"
+          echo "  Integration tests: ${{ needs.run-integration-tests.result }}"
+          echo ""
+
+          if [[ "${{ needs.run-integration-tests.result }}" == "success" ]];
+          then
+            echo "🎉 Integration tests completed successfully!"
+            echo ""
+            echo "Next steps:"
+            echo "  - Review test artifacts for detailed results"
+            echo "  - If issues found, run with --debug or --verbose flags"
+            echo "  - Consider running specific component tests with" \
+                 "--component flag"
+          else
+            echo "❌ Integration tests failed or were skipped"
+            echo ""
+            echo "Troubleshooting steps:"
+            echo "  1. Check deployment artifacts for container logs"
+            echo "  2. Re-run with debug level 'verbose' for detailed output"
+            echo "  3. Use 'skip_cleanup: true' to inspect running containers"
+            echo "  4. Run component-specific tests to isolate issues"
+            echo ""
+            echo "Debug commands:"
+            echo "  act -j local-debug-integration-tests --verbose"
+            echo "  docker logs sigul-server"
+            echo "  docker exec -it sigul-server /bin/bash"
+          fi

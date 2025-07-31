@@ -2,6 +2,10 @@
 # SPDX-FileCopyrightText: 2025 The Linux Foundation
 
 # Temporary and binary files
+public-key.asc
+pki/
+artifacts/
+test-integration-workspace/
 *~
 *.py[cod]
 *.so
@@ -58,3 +62,16 @@ MANIFEST
 
 # Node
 node_modules/*
+
+# Generated PKI files (should not be committed)
+pki/client-pki-encrypted.asc
+
+# Generated test directories and artifacts (should not be committed)
+test-artifacts/
+test-workspace/
+
+# Ephemeral environment files with dynamic passwords (should not be committed)
+.env
+.env.*
+*.conf.backup.*
+/tmp/nss_password*.tmp
