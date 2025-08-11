@@ -89,6 +89,6 @@ USER sigul
 # Default command - initialize and start service
 CMD ["/usr/local/bin/sigul-init.sh", "--role", "server", "--start-service"]
 
-# Health check - verify process only (server connects to bridge, doesn't listen)
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD test -f /var/sigul/pids/sigul_server.pid && pgrep -f server >/dev/null || exit 1
+# Health check - more robust process check with longer grace period
+HEALTHCHECK --interval=45s --timeout=15s --start-period=120s --retries=5 \
+    CMD pgrep -f "sigul_server" >/dev/null 2>&1 || exit 1
