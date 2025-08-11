@@ -64,25 +64,28 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # Use ubuntu-latest for AMD64 builds (x86_64 runners)
+        # Use ubuntu-latest-arm for ARM64 builds (native ARM64 runners)
+        # This avoids QEMU emulation which can cause timeouts and failures
         include:
           - component: 'client'
             platform: 'linux/amd64'
             runner: ubuntu-latest
           - component: 'client'
             platform: 'linux/arm64'
-            runner: ubuntu-latest
+            runner: ubuntu-latest-arm
           - component: 'server'
             platform: 'linux/amd64'
             runner: ubuntu-latest
           - component: 'server'
             platform: 'linux/arm64'
-            runner: ubuntu-latest
+            runner: ubuntu-latest-arm
           - component: 'bridge'
             platform: 'linux/amd64'
             runner: ubuntu-latest
           - component: 'bridge'
             platform: 'linux/arm64'
-            runner: ubuntu-latest
+            runner: ubuntu-latest-arm
     outputs:
       client-amd64-digest: ${{ steps.build-client-amd64.outputs.digest }}
       client-arm64-digest: ${{ steps.build-client-arm64.outputs.digest }}
@@ -222,7 +225,7 @@ jobs:
             runner: ubuntu-latest
             run-mock-tests: true
           - platform: linux/arm64
-            runner: ubuntu-latest
+            runner: ubuntu-latest-arm
             run-mock-tests: true
     steps:
       # Harden the runner used by this workflow
@@ -678,7 +681,7 @@ jobs:
           - platform: linux/amd64
             runner: ubuntu-latest
           - platform: linux/arm64
-            runner: ubuntu-latest
+            runner: ubuntu-latest-arm
     outputs:
       server-container: ${{ steps.deploy.outputs.server-container }}
       bridge-container: ${{ steps.deploy.outputs.bridge-container }}
