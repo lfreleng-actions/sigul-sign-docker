@@ -389,11 +389,27 @@ bridge-key-file = /var/sigul/secrets/certificates/bridge-key.pem
 require-tls = true
 EOF
 
-    # Client configuration removed from infrastructure deployment
-    # (only needed for integration tests, not infrastructure deployment)
+    # Generate client configuration
+    log "Creating client configuration..."
+    cat > "${config_dir}/client.conf" << 'EOF'
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2025 The Linux Foundation
 
-    # Set proper permissions for infrastructure configuration files
-    for config_file in server.conf bridge.conf; do
+[client]
+bridge-hostname = sigul-bridge
+bridge-port = 44334
+server-hostname = sigul-server
+max-file-payload-size = 2097152
+username = integration-tester
+
+# TLS Configuration using exported certificates
+ca-cert-file = /opt/sigul/pki/ca.crt
+require-tls = true
+verify-server-cert = true
+EOF
+
+    # Set proper permissions for all configuration files
+    for config_file in server.conf bridge.conf client.conf; do
         local config_path="${config_dir}/${config_file}"
         if [[ -f "$config_path" ]]; then
             chmod 644 "$config_path"
@@ -599,33 +615,41 @@ export_certificates_from_containers() {
         warn "Sigul bridge container not found for certificate export"
     fi
 
-    # Generate client certificates if they don't exist
-    if [[ ! -f "$pki_dir/client.crt" ]]; then
-        verbose "Generating client certificate for integration tests..."
+    # Generate client certificates for integration tests
+    verbose "Generating client certificate for integration tests..."
 
-        # Use server container to generate client cert (it has all the tools)
-        docker exec sigul-server bash -c "
-            cd /var/sigul/secrets/certificates
-            if [[ ! -f client-key.pem ]]; then
-                openssl genrsa -out client-key.pem 2048
-            fi
-            if [[ ! -f client.crt ]]; then
-                openssl req -new -x509 -key client-key.pem -out client.crt -days 365 \
-                    -subj '/C=US/ST=Test/L=Test/O=Sigul Test/OU=Testing/CN=client.sigul.test'
-            fi
-        "
-
-        # Export client certificates
-        if docker exec sigul-server test -f /var/sigul/secrets/certificates/client.crt; then
-            docker cp sigul-server:/var/sigul/secrets/certificates/client.crt "$pki_dir/"
-            verbose "Exported client.crt"
+    # Use server container to generate client cert (it has all the tools)
+    docker exec sigul-server bash -c "
+        cd /var/sigul/secrets/certificates
+        if [[ ! -f client-key.pem ]]; then
+            openssl genrsa -out client-key.pem 2048
         fi
-
-        if docker exec sigul-server test -f /var/sigul/secrets/certificates/client-key.pem; then
-            docker cp sigul-server:/var/sigul/secrets/certificates/client-key.pem "$pki_dir/"
-            verbose "Exported client-key.pem"
+        if [[ ! -f client.crt ]]; then
+            openssl req -new -x509 -key client-key.pem -out client.crt -days 365 \
+                -subj '/C=US/ST=Test/L=Test/O=Sigul Test/OU=Testing/CN=client.sigul.test'
         fi
+    "
+
+    # Export client certificates
+    if docker exec sigul-server test -f /var/sigul/secrets/certificates/client.crt; then
+        docker cp sigul-server:/var/sigul/secrets/certificates/client.crt "$pki_dir/"
+        verbose "Exported client.crt"
+    else
+        error "Failed to generate client certificate"
+        return 1
     fi
+
+    if docker exec sigul-server test -f /var/sigul/secrets/certificates/client-key.pem; then
+        docker cp sigul-server:/var/sigul/secrets/certificates/client-key.pem "$pki_dir/"
+        verbose "Exported client-key.pem"
+    else
+        error "Failed to generate client private key"
+        return 1
+    fi
+
+    # Set proper permissions on exported client certificates
+    chmod 644 "$pki_dir/client.crt" 2>/dev/null || true
+    chmod 600 "$pki_dir/client-key.pem" 2>/dev/null || true
 
     # List exported certificates
     if [[ -d "$pki_dir" ]]; then
@@ -855,6 +879,30 @@ deploy_sigul_services() {
             fi
         else
             warn "Could not determine Sigul bridge container IP"
+        fi
+
+        success "Sigul bridge container started"
+
+        # Wait for bridge to be fully ready
+        log "Waiting for bridge to be fully operational..."
+        local bridge_ready=false
+        local bridge_attempts=0
+        local max_bridge_attempts=30
+
+        while [[ $bridge_attempts -lt $max_bridge_attempts ]]; do
+            if nc -z localhost 44334 2>/dev/null; then
+                bridge_ready=true
+                break
+            fi
+            ((bridge_attempts++))
+            verbose "Bridge readiness check $bridge_attempts/$max_bridge_attempts..."
+            sleep 2
+        done
+
+        if [[ "$bridge_ready" == "true" ]]; then
+            success "Bridge is ready and accepting connections"
+        else
+            warn "Bridge may not be fully ready, but continuing..."
         fi
     else
         error "Failed to start Sigul bridge container"

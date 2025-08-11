@@ -98,6 +98,107 @@ get_sigul_network_name() {
     echo "${project_name}_sigul-network"
 }
 
+# Start a persistent client container for integration tests
+start_client_container() {
+    local network_name="$1"
+    local client_container_name="sigul-client-integration"
+
+    log "Starting persistent client container for integration tests..."
+
+    # Remove any existing client container
+    docker rm -f "$client_container_name" 2>/dev/null || true
+
+    # Start the client container with proper initialization
+    if ! docker run -d --name "$client_container_name" \
+        --network "$network_name" \
+        -v "${PROJECT_ROOT}/configs:/etc/sigul:ro" \
+        -v "${PROJECT_ROOT}/pki:/opt/sigul/pki:ro" \
+        -v "${PROJECT_ROOT}:/workspace:rw" \
+        -w /workspace \
+        -e SIGUL_ROLE=client \
+        -e SIGUL_MOCK_MODE=false \
+        -e NSS_PASSWORD="${EPHEMERAL_ADMIN_PASSWORD}" \
+        -e DEBUG=true \
+        "$SIGUL_CLIENT_IMAGE" \
+        tail -f /dev/null; then
+        error "Failed to start client container"
+        return 1
+    fi
+
+    # Wait for container to start
+    sleep 3
+
+    # Verify container is running
+    if ! docker ps --filter "name=$client_container_name" --filter "status=running" | grep -q "$client_container_name"; then
+        error "Client container failed to start properly"
+        docker logs "$client_container_name" || true
+        return 1
+    fi
+
+    # Initialize the client in the container
+    verbose "Initializing sigul client in container..."
+    verbose "Client container logs before init:"
+    docker logs "$client_container_name" 2>/dev/null || true
+
+    if docker exec "$client_container_name" /usr/local/bin/sigul-init.sh --role client 2>&1; then
+        success "Client container initialized successfully"
+
+        # Verify basic client functionality
+        verbose "Testing basic client configuration..."
+        if docker exec "$client_container_name" test -f /etc/sigul/client.conf; then
+            verbose "Client configuration file found"
+        else
+            warn "Client configuration file not found"
+        fi
+
+        if docker exec "$client_container_name" test -f /opt/sigul/pki/ca.crt; then
+            verbose "CA certificate found"
+        else
+            warn "CA certificate not found"
+        fi
+
+        return 0
+    else
+        error "Failed to initialize client container"
+        verbose "Client initialization logs:"
+        docker logs "$client_container_name" 2>/dev/null || true
+        return 1
+    fi
+}
+
+# Stop the persistent client container
+stop_client_container() {
+    local client_container_name="sigul-client-integration"
+    verbose "Stopping client container..."
+    docker rm -f "$client_container_name" 2>/dev/null || true
+}
+
+# Helper function to run sigul client commands in the persistent container
+run_sigul_client_cmd() {
+    local cmd=("$@")
+    local client_container_name="sigul-client-integration"
+
+    verbose "Running sigul client command: ${cmd[*]}"
+
+    # Check if container is still running
+    if ! docker ps --filter "name=$client_container_name" --filter "status=running" | grep -q "$client_container_name"; then
+        error "Client container is not running"
+        return 1
+    fi
+
+    # Run the command with better error handling
+    if docker exec "$client_container_name" "${cmd[@]}"; then
+        return 0
+    else
+        local exit_code=$?
+        verbose "Command failed with exit code: $exit_code"
+        verbose "Container logs:"
+        docker logs "$client_container_name" --tail 20 2>/dev/null || true
+        return $exit_code
+    fi
+}
+
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -349,11 +450,7 @@ test_user_key_creation() {
     network_name=$(get_sigul_network_name)
     verbose "Using Docker network: $network_name"
 
-    if docker run --rm --network "$network_name" \
-        -v "${PROJECT_ROOT}/configs:/etc/sigul:ro" \
-        -v "${PROJECT_ROOT}/pki:/opt/sigul/pki:ro" \
-        -e SIGUL_MOCK_MODE=false \
-        "$SIGUL_CLIENT_IMAGE" \
+    if run_sigul_client_cmd \
         sigul -c /etc/sigul/client.conf new-user \
         --admin-name admin --admin-password "$EPHEMERAL_ADMIN_PASSWORD" \
         integration-tester "$EPHEMERAL_TEST_PASSWORD" 2>/dev/null; then
@@ -366,11 +463,7 @@ test_user_key_creation() {
 
     # Create signing key
     verbose "Creating test signing key..."
-    if docker run --rm --network "$network_name" \
-        -v "${PROJECT_ROOT}/configs:/etc/sigul:ro" \
-        -v "${PROJECT_ROOT}/pki:/opt/sigul/pki:ro" \
-        -e SIGUL_MOCK_MODE=false \
-        "$SIGUL_CLIENT_IMAGE" \
+    if run_sigul_client_cmd \
         sigul -c /etc/sigul/client.conf new-key \
         --key-admin integration-tester --key-admin-password "$EPHEMERAL_TEST_PASSWORD" \
         test-signing-key 2048 2>/dev/null; then
@@ -381,11 +474,7 @@ test_user_key_creation() {
         # Key might already exist, try to continue with existing key
         verbose "Key creation failed (key may already exist)"
         # Test if key exists by trying to list it
-        if docker run --rm --network "$network_name" \
-            -v "${PROJECT_ROOT}/configs:/etc/sigul:ro" \
-            -v "${PROJECT_ROOT}/pki:/opt/sigul/pki:ro" \
-            -e SIGUL_MOCK_MODE=false \
-            "$SIGUL_CLIENT_IMAGE" \
+        if run_sigul_client_cmd \
             sigul -c /etc/sigul/client.conf list-keys \
             --password "$EPHEMERAL_TEST_PASSWORD" 2>/dev/null | grep -q "test-signing-key"; then
             verbose "Test signing key already exists, proceeding with tests"
@@ -406,11 +495,7 @@ test_basic_functionality() {
     local network_name
     network_name=$(get_sigul_network_name)
 
-    if docker run --rm --network "$network_name" \
-        -v "${PROJECT_ROOT}/configs:/etc/sigul:ro" \
-        -v "${PROJECT_ROOT}/pki:/opt/sigul/pki:ro" \
-        -e SIGUL_MOCK_MODE=false \
-        "$SIGUL_CLIENT_IMAGE" \
+    if run_sigul_client_cmd \
         sigul -c /etc/sigul/client.conf list-keys \
         --password "$EPHEMERAL_TEST_PASSWORD" 2>/dev/null; then
 
@@ -436,13 +521,7 @@ test_file_signing() {
     local network_name
     network_name=$(get_sigul_network_name)
 
-    if docker run --rm --network "$network_name" \
-        -v "${PROJECT_ROOT}/configs:/etc/sigul:ro" \
-        -v "${PROJECT_ROOT}/pki:/opt/sigul/pki:ro" \
-        -v "${PROJECT_ROOT}:/workspace:rw" \
-        -w /workspace \
-        -e SIGUL_MOCK_MODE=false \
-        "$SIGUL_CLIENT_IMAGE" \
+    if run_sigul_client_cmd \
         sigul -c /etc/sigul/client.conf sign-data \
         --password "$EPHEMERAL_TEST_PASSWORD" \
         test-signing-key test-workspace/document1.txt 2>/dev/null; then
@@ -482,13 +561,7 @@ test_rpm_signing() {
     local network_name
     network_name=$(get_sigul_network_name)
 
-    if docker run --rm --network "$network_name" \
-        -v "${PROJECT_ROOT}/configs:/etc/sigul:ro" \
-        -v "${PROJECT_ROOT}/pki:/opt/sigul/pki:ro" \
-        -v "${PROJECT_ROOT}:/workspace:rw" \
-        -w /workspace \
-        -e SIGUL_MOCK_MODE=false \
-        "$SIGUL_CLIENT_IMAGE" \
+    if run_sigul_client_cmd \
         sigul -c /etc/sigul/client.conf sign-rpm \
         --password "$EPHEMERAL_TEST_PASSWORD" \
         test-signing-key test-workspace/test-package.rpm 2>/dev/null; then
@@ -498,11 +571,7 @@ test_rpm_signing() {
         # RPM signing may fail if the file is not a valid RPM, but the command should execute
         warn "RPM signing failed (test file is not a valid RPM package)"
         # Check if the sigul command at least connected to the server
-        if docker run --rm --network "$network_name" \
-            -v "${PROJECT_ROOT}/configs:/etc/sigul:ro" \
-            -v "${PROJECT_ROOT}/pki:/opt/sigul/pki:ro" \
-            -e SIGUL_MOCK_MODE=false \
-            "$SIGUL_CLIENT_IMAGE" \
+        if run_sigul_client_cmd \
             sigul -c /etc/sigul/client.conf list-keys \
             --password "$EPHEMERAL_TEST_PASSWORD" 2>/dev/null >/dev/null; then
             verbose "Sigul connection works, RPM signing failed due to invalid RPM format"
@@ -528,11 +597,7 @@ test_key_management() {
     local network_name
     network_name=$(get_sigul_network_name)
 
-    if docker run --rm --network "$network_name" \
-        -v "${PROJECT_ROOT}/configs:/etc/sigul:ro" \
-        -v "${PROJECT_ROOT}/pki:/opt/sigul/pki:ro" \
-        -e SIGUL_MOCK_MODE=false \
-        "$SIGUL_CLIENT_IMAGE" \
+    if run_sigul_client_cmd \
         sigul -c /etc/sigul/client.conf list-users \
         --password "$EPHEMERAL_TEST_PASSWORD" 2>/dev/null; then
 
@@ -543,13 +608,7 @@ test_key_management() {
 
     # Get public key to verify key management functionality
     verbose "Retrieving public key for test-signing-key..."
-    if docker run --rm --network "$network_name" \
-        -v "${PROJECT_ROOT}/configs:/etc/sigul:ro" \
-        -v "${PROJECT_ROOT}/pki:/opt/sigul/pki:ro" \
-        -v "${PROJECT_ROOT}:/workspace:rw" \
-        -w /workspace \
-        -e SIGUL_MOCK_MODE=false \
-        "$SIGUL_CLIENT_IMAGE" \
+    if run_sigul_client_cmd \
         sigul -c /etc/sigul/client.conf get-public-key \
         --password "$EPHEMERAL_TEST_PASSWORD" \
         test-signing-key > public-key.asc 2>/dev/null; then
@@ -591,13 +650,7 @@ test_batch_operations() {
 
     for i in {1..3}; do
         verbose "Signing batch-test-${i}.txt..."
-        if docker run --rm --network "$network_name" \
-            -v "${PROJECT_ROOT}/configs:/etc/sigul:ro" \
-            -v "${PROJECT_ROOT}/pki:/opt/sigul/pki:ro" \
-            -v "${PROJECT_ROOT}:/workspace:rw" \
-            -w /workspace \
-            -e SIGUL_MOCK_MODE=false \
-            "$SIGUL_CLIENT_IMAGE" \
+        if run_sigul_client_cmd \
             sigul -c /etc/sigul/client.conf sign-data \
             --password "$EPHEMERAL_TEST_PASSWORD" \
             test-signing-key "test-workspace/batch-test-${i}.txt" 2>/dev/null; then
@@ -634,6 +687,9 @@ test_batch_operations() {
 # Cleanup containers using Docker Compose
 cleanup_containers() {
     log "Cleaning up infrastructure containers..."
+
+    # Stop client container first
+    stop_client_container
 
     # Ensure environment variables are set for compose commands
     detect_and_set_environment
@@ -745,6 +801,14 @@ run_integration_tests() {
     # Setup and preparation
     setup_test_environment
     verify_infrastructure_running
+
+    # Start persistent client container
+    local network_name
+    network_name=$(get_sigul_network_name)
+    if ! start_client_container "$network_name"; then
+        error "Failed to start client container"
+        return 1
+    fi
 
     # Run comprehensive test suite against functional infrastructure
     log "Running real cryptographic operations..."
