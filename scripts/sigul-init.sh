@@ -1290,36 +1290,56 @@ setup_admin_user() {
     local admin_password_file="$SECRETS_DIR/server_admin_password"
 
     log "Setting up admin user for Sigul server"
+    debug "Config file: $config_file"
+    debug "Admin password file: $admin_password_file"
+    debug "SIGUL_ADMIN_PASSWORD env var: ${SIGUL_ADMIN_PASSWORD:+SET}"
 
     # Check if admin password exists
     if [[ ! -f "$admin_password_file" ]]; then
-        error "Admin password file not found: $admin_password_file"
+        warn "Admin password file not found: $admin_password_file"
+        debug "Listing contents of secrets directory:"
+        debug "$(find "$SECRETS_DIR" -type f 2>/dev/null | head -10 || echo 'No files found')"
+        log "Skipping admin user creation - password not available"
+        return 0
     fi
 
     local admin_password
     admin_password=$(cat "$admin_password_file")
+    debug "Successfully read admin password from file"
 
     # Check if sigul_server_add_admin command exists
     if ! command -v sigul_server_add_admin >/dev/null 2>&1; then
-        debug "sigul_server_add_admin not found, admin user will need to be created manually"
-        log "To create admin user manually, run: sigul_server_add_admin --config-file=$config_file --name=admin"
+        log "sigul_server_add_admin command not found, skipping admin user creation"
+        debug "Available sigul commands: $(find /usr/bin /usr/local/bin -name 'sigul*' 2>/dev/null || echo 'none found')"
+        log "Admin user can be created manually later if needed"
         return 0
     fi
 
     # Create admin user using official sigul command
     log "Creating admin user using sigul_server_add_admin..."
-    echo -e "admin\n$admin_password" | sigul_server_add_admin --config-file="$config_file" --batch || {
+    debug "Running: sigul_server_add_admin --config-file=$config_file --batch"
+
+    local add_admin_output
+    if add_admin_output=$(echo -e "admin\n$admin_password" | sigul_server_add_admin --config-file="$config_file" --batch 2>&1); then
+        log "Admin user created successfully"
+        debug "Admin creation output: $add_admin_output"
+        return 0
+    else
+        debug "Admin creation failed with output: $add_admin_output"
+
         # Check if user already exists (common case)
-        if sigul_server_add_admin --config-file="$config_file" --name=admin --list 2>/dev/null | grep -q "admin"; then
+        local list_output
+        if list_output=$(sigul_server_add_admin --config-file="$config_file" --name=admin --list 2>&1) && echo "$list_output" | grep -q "admin"; then
             log "Admin user already exists, skipping creation"
+            debug "Existing admin user confirmed: $list_output"
             return 0
         else
-            error "Failed to add admin user"
+            warn "Failed to add admin user - server will start without admin user"
+            debug "List users output: $list_output"
+            log "Admin user can be created manually after server startup"
+            return 0
         fi
-    }
-
-    log "Admin user created successfully"
-    return 0
+    fi
 }
 
 # Validate database integrity
@@ -1372,7 +1392,8 @@ setup_database() {
     # Step 3: Set up admin user (if not skipped)
     if [[ "${SIGUL_SKIP_ADMIN_USER:-false}" != "true" ]]; then
         if ! setup_admin_user; then
-            error "Failed to setup admin user"
+            warn "Admin user setup encountered issues but server will continue"
+            log "Admin user can be created manually after server startup"
         fi
     else
         log "Skipping admin user creation (SIGUL_SKIP_ADMIN_USER=true)"

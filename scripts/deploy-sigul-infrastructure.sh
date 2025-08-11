@@ -654,13 +654,19 @@ deploy_sigul_services() {
     export SIGUL_BRIDGE_IMAGE="bridge-${platform_id}-image:test"
     # SIGUL_CLIENT_IMAGE removed from infrastructure deployment (only needed for integration tests)
 
-    # Enable admin user creation for functional testing
-    export SIGUL_SKIP_ADMIN_USER="false"
-    # Generate ephemeral admin password for testing
+    # Generate ephemeral admin password BEFORE starting containers
+    log "Setting up ephemeral credentials for deployment..."
     local ephemeral_admin_password
     ephemeral_admin_password=$(openssl rand -base64 16)
     export SIGUL_ADMIN_PASSWORD="$ephemeral_admin_password"
-    verbose "Generated ephemeral admin password for deployment"
+    export SIGUL_SKIP_ADMIN_USER="false"
+
+    # Generate ephemeral NSS password as well
+    local ephemeral_nss_password
+    ephemeral_nss_password=$(openssl rand -base64 24)
+    export NSS_PASSWORD="$ephemeral_nss_password"
+
+    verbose "Generated ephemeral credentials for deployment"
 
     # Store password for integration tests to use
     mkdir -p "${PROJECT_ROOT}/test-artifacts"
@@ -670,6 +676,7 @@ deploy_sigul_services() {
     verbose "Deploying Sigul services for platform: $platform_id"
     verbose "Using server image: ${SIGUL_SERVER_IMAGE}"
     verbose "Using bridge image: ${SIGUL_BRIDGE_IMAGE}"
+    verbose "Admin user creation: enabled"
 
     # Start Sigul server first
     log "Starting Sigul server..."
