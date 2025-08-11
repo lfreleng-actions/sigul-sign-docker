@@ -1057,7 +1057,6 @@ generate_bridge_config() {
 # See: /usr/share/sigul/bridge.py create_listen_sock() function
 client-listen-port = ${SIGUL_BRIDGE_CLIENT_PORT}
 server-listen-port = ${SIGUL_BRIDGE_SERVER_PORT}
-# Server connection configuration
 server-hostname = sigul-server
 bridge-cert-nickname = sigul-bridge-cert
 max-file-payload-size = 2097152
