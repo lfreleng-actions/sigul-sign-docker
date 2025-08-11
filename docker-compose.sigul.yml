@@ -46,8 +46,8 @@ services:
       - sigul-network
     restart: unless-stopped
     init: true
-    # Initialize server using unified approach
-    command: ["/usr/local/bin/sigul-init.sh", "--role", "server"]
+    # Initialize server using unified approach with debug logging
+    command: ["/usr/local/bin/sigul-init.sh", "--role", "server", "--debug"]
 
   # Sigul Bridge Container
   sigul-bridge:
@@ -71,19 +71,19 @@ services:
     ports:
       - "44334:44334"
     healthcheck:
-      test: ["CMD-SHELL", "test -f /var/sigul/pids/sigul_bridge.pid && pgrep -f bridge >/dev/null || exit 1"]
-      interval: 30s
-      timeout: 10s
+      test: ["CMD-SHELL", "pgrep -f 'sigul_bridge' >/dev/null 2>&1 || exit 1"]
+      interval: 45s
+      timeout: 15s
       retries: 5
-      start_period: 90s
+      start_period: 120s
     networks:
       - sigul-network
     restart: unless-stopped
     init: true
     security_opt:
       - no-new-privileges:true
-    # Initialize bridge using unified approach
-    command: ["/usr/local/bin/sigul-init.sh", "--role", "bridge"]
+    # Initialize bridge using unified approach with debug logging
+    command: ["/usr/local/bin/sigul-init.sh", "--role", "bridge", "--debug"]
 
   # Sigul Client Test Environment
   sigul-client-test:

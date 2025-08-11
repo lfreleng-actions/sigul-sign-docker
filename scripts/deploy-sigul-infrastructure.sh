@@ -109,9 +109,8 @@ DESCRIPTION:
 
     The script performs:
     1. Environment analysis and prerequisite checking
-    2. Permission-aware PKI infrastructure setup
-    3. Pre-generated configuration files with proper ownership
-    4. SQLite database setup with health checks
+    2. Pre-generated configuration files with proper ownership
+    3. SQLite database setup with health checks
     5. Sigul server and bridge container deployment with diagnostics
     6. Comprehensive health checks and connectivity verification
 
@@ -190,7 +189,7 @@ check_prerequisites() {
     local missing_tools=()
 
     # Check for required tools
-    for tool in docker openssl nc; do
+    for tool in docker nc; do
         if ! command -v "$tool" >/dev/null 2>&1; then
             missing_tools+=("$tool")
         else
@@ -230,101 +229,7 @@ check_prerequisites() {
     success "Prerequisites check passed"
 }
 
-# Setup PKI with proper permissions and validation
-setup_pki_infrastructure() {
-    log "Setting up PKI infrastructure with enhanced validation..."
 
-    local pki_dir="${PROJECT_ROOT}/pki"
-
-    # Ensure PKI directory exists with proper permissions
-    mkdir -p "$pki_dir"
-    chmod 755 "$pki_dir"
-    debug "PKI directory: $pki_dir ($(ls -ld "$pki_dir"))"
-
-    # Check if existing PKI infrastructure is present and valid
-    if [[ -f "${pki_dir}/ca.crt" && -f "${pki_dir}/server.crt" && \
-          -f "${pki_dir}/server-key.pem" && -f "${pki_dir}/bridge.crt" && \
-          -f "${pki_dir}/bridge-key.pem" ]]; then
-
-        log "Existing PKI infrastructure found, performing comprehensive validation..."
-
-        # Verify certificate chain
-        if openssl verify -CAfile "${pki_dir}/ca.crt" "${pki_dir}/server.crt" >/dev/null 2>&1 && \
-           openssl verify -CAfile "${pki_dir}/ca.crt" "${pki_dir}/bridge.crt" >/dev/null 2>&1; then
-
-            # Additional certificate validation
-            local ca_subject server_subject bridge_subject
-            ca_subject=$(openssl x509 -in "${pki_dir}/ca.crt" -noout -subject 2>/dev/null | cut -d= -f2-)
-            server_subject=$(openssl x509 -in "${pki_dir}/server.crt" -noout -subject 2>/dev/null | cut -d= -f2-)
-            bridge_subject=$(openssl x509 -in "${pki_dir}/bridge.crt" -noout -subject 2>/dev/null | cut -d= -f2-)
-
-            verbose "Certificate validation results:"
-            verbose "  CA Subject: ${ca_subject}"
-            verbose "  Server Subject: ${server_subject}"
-            verbose "  Bridge Subject: ${bridge_subject}"
-
-            # Check certificate expiration
-            local ca_expires server_expires bridge_expires
-            ca_expires=$(openssl x509 -in "${pki_dir}/ca.crt" -noout -enddate 2>/dev/null | cut -d= -f2)
-            server_expires=$(openssl x509 -in "${pki_dir}/server.crt" -noout -enddate 2>/dev/null | cut -d= -f2)
-            bridge_expires=$(openssl x509 -in "${pki_dir}/bridge.crt" -noout -enddate 2>/dev/null | cut -d= -f2)
-
-            debug "Certificate expiration dates:"
-            debug "  CA: ${ca_expires}"
-            debug "  Server: ${server_expires}"
-            debug "  Bridge: ${bridge_expires}"
-
-            success "PKI infrastructure validation passed"
-            return 0
-        else
-            warn "PKI infrastructure validation failed, regenerating..."
-        fi
-    else
-        log "PKI infrastructure missing or incomplete, generating new certificates..."
-    fi
-
-    # Generate PKI infrastructure using existing script
-    if [[ -f "${SCRIPT_DIR}/generate-complete-pki.sh" ]]; then
-        verbose "Using comprehensive PKI generation script..."
-        chmod +x "${SCRIPT_DIR}/generate-complete-pki.sh"
-        if "${SCRIPT_DIR}/generate-complete-pki.sh"; then
-            success "PKI generated using comprehensive script"
-        else
-            error "Comprehensive PKI generation failed"
-            exit 1
-        fi
-    elif [[ -f "${SCRIPT_DIR}/generate-test-pki.sh" ]]; then
-        verbose "Using test PKI generation script..."
-        chmod +x "${SCRIPT_DIR}/generate-test-pki.sh"
-        if "${SCRIPT_DIR}/generate-test-pki.sh"; then
-            success "PKI generated using test script"
-        else
-            error "Test PKI generation failed"
-            exit 1
-        fi
-    else
-        error "No PKI generation script found"
-        exit 1
-    fi
-
-    # Verify generated PKI and set appropriate permissions
-    for cert_file in ca.crt server.crt server-key.pem bridge.crt bridge-key.pem; do
-        local cert_path="${pki_dir}/${cert_file}"
-        if [[ -f "$cert_path" ]]; then
-            # Set appropriate permissions (readable by all, writable by owner)
-            chmod 644 "$cert_path"
-            if [[ "$cert_file" == *"-key.pem" ]]; then
-                chmod 600 "$cert_path"  # Private keys should be more restrictive
-            fi
-            debug "Set permissions for $cert_file: $(ls -l "$cert_path")"
-        else
-            error "Generated certificate not found: $cert_file"
-            exit 1
-        fi
-    done
-
-    success "PKI infrastructure setup completed successfully"
-}
 
 # Generate configurations with proper permissions
 generate_configurations() {
@@ -335,7 +240,7 @@ generate_configurations() {
     chmod 755 "${config_dir}"
     debug "Config directory: $config_dir ($(ls -ld "$config_dir"))"
 
-    local pki_dir="${PROJECT_ROOT}/pki"
+
 
     # Generate server configuration
     log "Creating server configuration..."
@@ -403,7 +308,7 @@ server-hostname = sigul-server
 max-file-payload-size = 2097152
 username = integration-tester
 
-# TLS Configuration using exported certificates
+# TLS Configuration using containerized certificates
 ca-cert-file = /opt/sigul/pki/ca.crt
 require-tls = true
 verify-server-cert = true
@@ -562,109 +467,7 @@ load_infrastructure_images() {
     success "Infrastructure image loading completed"
 }
 
-# Export certificates from containers to host PKI directory for integration tests
-export_certificates_from_containers() {
-    log "Exporting certificates from containers to host PKI directory..."
 
-    local pki_dir="${PROJECT_ROOT}/pki"
-    mkdir -p "$pki_dir"
-
-    # Wait a moment for containers to fully initialize
-    sleep 5
-
-    # Export certificates from server container
-    if docker ps --format "{{.Names}}" | grep -q "sigul-server"; then
-        verbose "Exporting certificates from sigul-server container..."
-
-        # Export CA certificate
-        if docker exec sigul-server test -f /var/sigul/secrets/certificates/ca.crt; then
-            docker cp sigul-server:/var/sigul/secrets/certificates/ca.crt "$pki_dir/"
-            verbose "Exported ca.crt"
-        fi
-
-        # Export server certificate
-        if docker exec sigul-server test -f /var/sigul/secrets/certificates/server.crt; then
-            docker cp sigul-server:/var/sigul/secrets/certificates/server.crt "$pki_dir/"
-            verbose "Exported server.crt"
-        fi
-
-        # Export server private key
-        if docker exec sigul-server test -f /var/sigul/secrets/certificates/server-key.pem; then
-            docker cp sigul-server:/var/sigul/secrets/certificates/server-key.pem "$pki_dir/"
-            verbose "Exported server-key.pem"
-        fi
-    else
-        warn "Sigul server container not found for certificate export"
-    fi
-
-    # Export certificates from bridge container
-    if docker ps --format "{{.Names}}" | grep -q "sigul-bridge"; then
-        verbose "Exporting certificates from sigul-bridge container..."
-
-        # Export bridge certificate
-        if docker exec sigul-bridge test -f /var/sigul/secrets/certificates/bridge.crt; then
-            docker cp sigul-bridge:/var/sigul/secrets/certificates/bridge.crt "$pki_dir/"
-            verbose "Exported bridge.crt"
-        fi
-
-        # Export bridge private key
-        if docker exec sigul-bridge test -f /var/sigul/secrets/certificates/bridge-key.pem; then
-            docker cp sigul-bridge:/var/sigul/secrets/certificates/bridge-key.pem "$pki_dir/"
-            verbose "Exported bridge-key.pem"
-        fi
-    else
-        warn "Sigul bridge container not found for certificate export"
-    fi
-
-    # Generate client certificates for integration tests
-    verbose "Generating client certificate for integration tests..."
-
-    # Use server container to generate client cert (it has all the tools)
-    docker exec sigul-server bash -c "
-        cd /var/sigul/secrets/certificates
-        if [[ ! -f client-key.pem ]]; then
-            openssl genrsa -out client-key.pem 2048
-        fi
-        if [[ ! -f client.crt ]]; then
-            openssl req -new -x509 -key client-key.pem -out client.crt -days 365 \
-                -subj '/C=US/ST=Test/L=Test/O=Sigul Test/OU=Testing/CN=client.sigul.test'
-        fi
-    "
-
-    # Export client certificates
-    if docker exec sigul-server test -f /var/sigul/secrets/certificates/client.crt; then
-        docker cp sigul-server:/var/sigul/secrets/certificates/client.crt "$pki_dir/"
-        verbose "Exported client.crt"
-    else
-        error "Failed to generate client certificate"
-        return 1
-    fi
-
-    if docker exec sigul-server test -f /var/sigul/secrets/certificates/client-key.pem; then
-        docker cp sigul-server:/var/sigul/secrets/certificates/client-key.pem "$pki_dir/"
-        verbose "Exported client-key.pem"
-    else
-        error "Failed to generate client private key"
-        return 1
-    fi
-
-    # Set proper permissions on exported client certificates
-    chmod 644 "$pki_dir/client.crt" 2>/dev/null || true
-    chmod 600 "$pki_dir/client-key.pem" 2>/dev/null || true
-
-    # List exported certificates
-    if [[ -d "$pki_dir" ]]; then
-        local cert_count
-        cert_count=$(find "$pki_dir" -name "*.crt" -o -name "*.pem" | wc -l)
-        success "Exported $cert_count certificate files to $pki_dir"
-        verbose "PKI directory contents:"
-        find "$pki_dir" -type f -exec ls -la {} \; 2>/dev/null | while read -r line; do
-            verbose "  $line"
-        done
-    else
-        warn "PKI directory was not created"
-    fi
-}
 
 # Deploy Sigul services with comprehensive monitoring
 deploy_sigul_services() {
@@ -682,13 +485,13 @@ deploy_sigul_services() {
     # Generate ephemeral admin password BEFORE starting containers
     log "Setting up ephemeral credentials for deployment..."
     local ephemeral_admin_password
-    ephemeral_admin_password=$(openssl rand -base64 16)
+    ephemeral_admin_password=$(head -c 12 /dev/urandom | base64)
     export SIGUL_ADMIN_PASSWORD="$ephemeral_admin_password"
     export SIGUL_SKIP_ADMIN_USER="false"
 
     # Generate ephemeral NSS password as well
     local ephemeral_nss_password
-    ephemeral_nss_password=$(openssl rand -base64 24)
+    ephemeral_nss_password=$(head -c 18 /dev/urandom | base64)
     export NSS_PASSWORD="$ephemeral_nss_password"
 
     verbose "Generated ephemeral credentials for deployment"
@@ -959,9 +762,6 @@ deploy_sigul_services() {
 
     success "Sigul bridge deployed and ready (took $((attempt-1)) attempts)"
 
-    # Export certificates from containers to host pki directory for integration tests
-    export_certificates_from_containers
-
     success "All Sigul services deployed successfully"
 }
 
@@ -1164,7 +964,6 @@ deploy_infrastructure() {
     # Enhanced deployment steps with better error handling
     analyze_environment || { error "Environment analysis failed"; return 1; }
     check_prerequisites || { error "Prerequisites check failed"; return 1; }
-    setup_pki_infrastructure || { error "PKI infrastructure setup failed"; return 1; }
     generate_configurations || { error "Configuration generation failed"; return 1; }
     load_infrastructure_images || { error "Image loading failed"; return 1; }
 
@@ -1180,7 +979,7 @@ deploy_infrastructure() {
     log "Infrastructure components summary:"
     log "  🖥️  Sigul Server: sigul-server (connects to bridge)"
     log "  🌉 Sigul Bridge: sigul-bridge (port 44334)"
-    log "  🔐 PKI Certificates: pki/ directory"
+    log "  🔐 PKI Certificates: Self-contained in containers"
     log "  ⚙️  Configuration Files: configs/ directory"
     log "  🕒 Total Deployment Time: ${duration} seconds"
 

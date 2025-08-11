@@ -2,8 +2,6 @@
 # SPDX-FileCopyrightText: 2025 The Linux Foundation
 
 [server]
-host = 0.0.0.0
-port = 44333
 bridge-hostname = sigul-bridge
 bridge-port = 44334
 max-file-payload-size = 2097152
