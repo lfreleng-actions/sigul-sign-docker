@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2025 The Linux Foundation
+
+[bridge]
+host = 0.0.0.0
+port = 44334
+server-hostname = sigul-server
+server-port = 44333
+max-file-payload-size = 2097152
+
+# TLS Configuration using containerized certificates
+ca-cert-file = /var/sigul/secrets/certificates/ca.crt
+bridge-cert-file = /var/sigul/secrets/certificates/bridge.crt
+bridge-key-file = /var/sigul/secrets/certificates/bridge-key.pem
+require-tls = true
+
+[daemon]
+uid = sigul
+gid = sigul

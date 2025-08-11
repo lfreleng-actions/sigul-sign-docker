@@ -3,7 +3,6 @@
 
 # Temporary and binary files
 public-key.asc
-pki/
 artifacts/
 test-integration-workspace/
 *~
@@ -62,8 +61,10 @@ MANIFEST
 
 # Node
 node_modules/*
-
-# Generated PKI files (should not be committed)
+# PKI files - allow shared CA and templates, but protect private keys and generated certs
+pki/*-key.pem
+pki/*.crt
+pki/ca.srl
 pki/client-pki-encrypted.asc
 
 # Generated test directories and artifacts (should not be committed)
