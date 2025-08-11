@@ -61,9 +61,15 @@ MANIFEST
 
 # Node
 node_modules/*
-# PKI files - allow shared CA and templates, but protect private keys and generated certs
+# PKI files - allow shared CA and templates, but protect component certificates
+# Allow CA certificate and key (needed for container builds)
+!pki/ca.crt
+!pki/ca-key.pem
+# Ignore component certificates and keys
 pki/*-key.pem
+!pki/ca-key.pem
 pki/*.crt
+!pki/ca.crt
 pki/ca.srl
 pki/client-pki-encrypted.asc
 
