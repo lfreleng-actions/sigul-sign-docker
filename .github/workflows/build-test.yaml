@@ -56,7 +56,7 @@ env:
 jobs:
   ### Build Sigul Client Container ###
   build-sigul-client:
-    name: "Build Sigul Client: ${{ matrix.platform }}"
+    name: "Build Client: ${{ matrix.platform }}"
     runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
@@ -166,7 +166,7 @@ jobs:
 
   ### Build Sigul Infrastructure Containers ###
   build-sigul-infrastructure:
-    name: "Build Sigul Infrastructure: ${{ matrix.component }} (${{ matrix.platform }})"
+    name: "Build Server/Bridge: ${{ matrix.component }} (${{ matrix.platform }})"
     runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
@@ -268,7 +268,7 @@ jobs:
 
   ### Test Sigul Client Container ###
   test-docker:
-    name: "Test Image: ${{ matrix.platform }}"
+    name: "Test Client: ${{ matrix.platform }}"
     runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
@@ -724,12 +724,12 @@ jobs:
             fi
           done
 
-  deploy-sigul-infrastructure:
-    name: 'Deploy Sigul Infrastructure: ${{ matrix.platform }}'
+  test-sigul-stack:
+    name: 'Deploy/Test Stack: ${{ matrix.platform }}'
     runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
-    timeout-minutes: 25
+    timeout-minutes: 35
     needs: [build-sigul-client, build-sigul-infrastructure]
     strategy:
       fail-fast: false
@@ -937,93 +937,6 @@ jobs:
             test-artifacts/
           retention-days: 1
 
-  sigul-integration-tests:
-    name: 'Sigul Integration Tests: ${{ matrix.platform }}'
-    runs-on: ${{ matrix.runner }}
-    permissions:
-      contents: read
-    timeout-minutes: 30
-    needs: deploy-sigul-infrastructure
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - platform: linux/amd64
-            runner: ubuntu-latest
-          - platform: linux/arm64
-            runner: ubuntu-24.04-arm
-    steps:
-      # Harden the runner used by this workflow
-      # yamllint disable-line rule:line-length
-      - uses: step-security/harden-runner@ec9f2d5744a09debf3a187a3f4f675c53b671911 # v2.13.0
-        with:
-          egress-policy: 'audit'
-
-      - name: 'Checkout repository'
-        # yamllint disable-line rule:line-length
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-
-      - name: 'Detect runner architecture'
-        id: runner-arch
-        shell: bash
-        run: |
-          # Detect the runner architecture
-          ARCH=$(uname -m)
-          case $ARCH in
-            x86_64)
-              PLATFORM_ID="linux-amd64"
-              DOCKER_PLATFORM="linux/amd64"
-              ;;
-            aarch64|arm64)
-              PLATFORM_ID="linux-arm64"
-              DOCKER_PLATFORM="linux/arm64"
-              ;;
-            *)
-              echo "❌ Unsupported architecture: $ARCH"
-              exit 1
-              ;;
-          esac
-          echo "platform-id=${PLATFORM_ID}" >> "$GITHUB_OUTPUT"
-          echo "docker-platform=${DOCKER_PLATFORM}" >> "$GITHUB_OUTPUT"
-          echo "📍 Detected runner architecture: $ARCH -> $PLATFORM_ID"
-
-      - name: 'Download infrastructure config artifact'
-        # yamllint disable-line rule:line-length
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4.3.0
-        with:
-          name: >-
-            sigul-infrastructure-config-${{
-              steps.runner-arch.outputs.platform-id
-            }}
-
-      - name: 'Set up Docker Buildx'
-        # yamllint disable-line rule:line-length
-        uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435  # v3.11.1
-
-      - name: 'Download Sigul Client image artifact'
-        # yamllint disable-line rule:line-length
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4.3.0
-        with:
-          name: 'client-${{ steps.runner-arch.outputs.platform-id }}-image'
-          path: /tmp
-
-      - name: 'Load Sigul Client container'
-        shell: bash
-        run: |
-          PLATFORM_ID="${{ steps.runner-arch.outputs.platform-id }}"
-          CLIENT_TAR_FILE="/tmp/client-${PLATFORM_ID}.tar"
-          if [ -f "${CLIENT_TAR_FILE}" ]; then
-            echo "Loading Sigul client image for ${PLATFORM_ID}..."
-            docker load --input "${CLIENT_TAR_FILE}"
-            # Tag the loaded image appropriately
-            docker tag "$(docker images --format "{{.Repository}}:{{.Tag}}" |\
-              head -1)" "client-${PLATFORM_ID}-image:test"
-            echo "✅ Sigul client image loaded and tagged"
-          else
-            echo "❌ Client image artifact not found: ${CLIENT_TAR_FILE}"
-            exit 1
-          fi
-
       - name: 'Run integration tests'
         shell: bash
         env:
@@ -1054,7 +967,7 @@ jobs:
     permissions:
       contents: read
     timeout-minutes: 5
-    needs: [sigul-integration-tests]
+    needs: [test-sigul-stack]
     if: always()
     steps:
       # Harden the runner used by this workflow
@@ -1093,9 +1006,10 @@ jobs:
   summary:
     name: 'Build Summary'
     runs-on: 'ubuntu-latest'
-    needs: [build-sigul-client, test-docker, publish-ghcr]
+    needs: [build-sigul-client, test-docker, publish-ghcr, test-sigul-stack]
     if: always()
     timeout-minutes: 1
+    # yamllint disable rule:line-length
     steps:
       - name: 'Generate build summary'
         shell: bash
@@ -1105,14 +1019,21 @@ jobs:
             echo ""
 
             echo "### Build Results"
-            echo "| Platform | Build | Test | Status |"
-            echo "|----------|-------|------|--------|"
+            echo "| Platform | Build | Test | Stack Deploy | Integration | Status |"
+            echo "|----------|-------|------|--------------|-------------|--------|"
 
             # Note: In real implementation, check actual job statuses
             echo "| linux/amd64 | ${{ needs.build-sigul-client.result }} |" \
-              " ${{ needs.test-docker.result }} | Built from artifacts |"
+              " ${{ needs.test-docker.result }} | ${{ needs.test-sigul-stack.result }} |" \
+              " ${{ needs.test-sigul-stack.result }} | Complete |"
             echo "| linux/arm64 | ${{ needs.build-sigul-client.result }} |" \
-              " ${{ needs.test-docker.result }} | Built from artifacts |"
+              " ${{ needs.test-docker.result }} | ${{ needs.test-sigul-stack.result }} |" \
+              " ${{ needs.test-sigul-stack.result }} | Complete |"
+            echo ""
+
+            echo "### Stack Deployment & Integration Tests"
+            echo "- **Status**: ${{ needs.test-sigul-stack.result }}"
+            echo "- **Includes**: Stack deployment, infrastructure setup, integration testing"
             echo ""
 
             echo "### GHCR Publishing"
