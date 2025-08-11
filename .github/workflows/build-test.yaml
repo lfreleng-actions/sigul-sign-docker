@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: 2025 The Linux Foundation
 
-name: 'Sigul Build/Test/Release 🐳'
+name: 'Sigul Build/Test 🐳'
 
 # yamllint disable-line rule:truthy
 on:
@@ -23,6 +23,12 @@ on:
         required: false
         default: v2
         type: string
+      purge_cache:
+        description: 'Clear Docker buildkit cache'
+        required: false
+        default: false
+        type: boolean
+
   push:
     branches: ['main']
   pull_request:
@@ -40,11 +46,12 @@ env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}/sigul-sign-docker
   # Enable BuildKit for advanced caching and optimization
-  DOCKER_BUILDKIT: ${{ github.event.inputs.docker_buildkit || '1' }}
+  DOCKER_BUILDKIT: ${{ github.event.inputs.docker_buildkit || '0' }}
   BUILDKIT_PROGRESS: plain
   # Cache version for manual cache busting - increment to force rebuild
   CACHE_VERSION: ${{ github.event.inputs.cache_version || 'v2' }}
   FORCE_REBUILD: ${{ github.event.inputs.force_rebuild || false }}
+  PURGE_CACHE: true
 
 jobs:
   ### Build Sigul Client Container ###
@@ -53,8 +60,6 @@ jobs:
     runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
-    # Typical ARM64 build time from source is ~7 minutes
-    # x64 container build faster as it leverages packages
     timeout-minutes: 12
     strategy:
       fail-fast: false
@@ -82,6 +87,18 @@ jobs:
       - name: 'Set up Docker Buildx'
         # yamllint disable-line rule:line-length
         uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435  # v3.11.1
+
+      - name: 'Optionally purge the cache when requested'
+        if: ${{ github.event.inputs.purge_cache == 'true' }}
+        run: |
+          # Purge the cache
+          docker buildx prune -f || true
+          gh cache delete --all || true
+          if [ "${{ github.event.inputs.purge_cache }}" == 'true' ]; then
+            echo "BUILDKIT_INLINE_CACHE=0" >> "$GITHUB_ENV"
+          else
+            echo "BUILDKIT_INLINE_CACHE=1" >> "$GITHUB_ENV"
+          fi
 
       - name: 'Extract platform identifier'
         id: platform
@@ -124,7 +141,7 @@ jobs:
           cache-from: ${{ github.event.inputs.force_rebuild == true && 'type=registry,ref=localhost/null' || format('type=gha,scope={0}-sigul-client-{1}-{2}', env.CACHE_VERSION, matrix.platform, matrix.runner) }}
           cache-to: type=gha,mode=max,scope=${{ env.CACHE_VERSION }}-sigul-client-${{ matrix.platform }}-${{ matrix.runner }}
           build-args: |
-            BUILDKIT_INLINE_CACHE=1
+            BUILDKIT_INLINE_CACHE=${{ env.BUILDKIT_INLINE_CACHE }}
 
       - name: 'Set build outputs for publishing'
         id: build-amd64
