@@ -125,8 +125,8 @@ services:
       SIGUL_URI: sigul-bridge
       SIGUL_MOCK_MODE: 'false'
       # Client-specific environment variables
-      SIGUL_BRIDGE_HOST: sigul-bridge
-      SIGUL_BRIDGE_PORT: 44334
+      SIGUL_BRIDGE_HOSTNAME: sigul-bridge
+      SIGUL_BRIDGE_CLIENT_PORT: 44334
       # NSS Database password for secure operation
       NSS_PASSWORD: ${NSS_PASSWORD:-auto_generated_ephemeral}
       DEBUG: ${DEBUG:-false}

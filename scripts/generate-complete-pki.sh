@@ -278,8 +278,9 @@ cat > "$TEST_PKI_DIR/bridge.conf.template" << EOF
 # SPDX-FileCopyrightText: 2025 The Linux Foundation
 
 [bridge]
-host = 0.0.0.0
-port = 44334
+# Bridge listening ports configuration (binds to all interfaces automatically)
+client-listen-port = 44334
+server-listen-port = 44333
 server-hostname = sigul-server
 max-file-payload-size = 2097152
 

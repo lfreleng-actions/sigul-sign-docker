@@ -289,7 +289,7 @@ setup_env() {
     debug "Environment setup complete:"
     debug "  Role: $SIGUL_ROLE"
     debug "  Base directory: $SIGUL_BASE_DIR"
-    debug "  Bridge: $SIGUL_BRIDGE_HOST:$SIGUL_BRIDGE_PORT"
+    debug "  Bridge: $SIGUL_BRIDGE_HOSTNAME:$SIGUL_BRIDGE_CLIENT_PORT"
     debug "  Debug mode: $DEBUG"
 }
 
