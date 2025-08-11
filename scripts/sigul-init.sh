@@ -1163,9 +1163,15 @@ validate_configuration() {
     debug "Validating configuration for role: $role"
     debug "Configuration file: $config_file"
 
-    # Check if configuration file exists
+    # Check if configuration file exists (check primary location and fallback)
     if [[ ! -f "$config_file" ]]; then
-        error "Configuration file not found: $config_file"
+        # Check fallback location for mounted configs
+        local fallback_config="/etc/sigul/${role}.conf"
+        if [[ ! -f "$fallback_config" ]]; then
+            error "Configuration file not found: $config_file or $fallback_config"
+        fi
+        config_file="$fallback_config"
+        debug "Using fallback configuration: $config_file"
     fi
 
     # Check file is readable
@@ -1187,7 +1193,7 @@ validate_configuration() {
                 error "Bridge configuration missing [bridge] section"
             fi
             # Check for required bridge settings
-            local required_settings=("host" "port" "server-hostname" "nss-dir")
+            local required_settings=("client-listen-port" "server-listen-port" "server-hostname" "nss-dir")
             ;;
         "client")
             if ! grep -q "^\[client\]" "$config_file"; then
@@ -1709,7 +1715,12 @@ start_server() {
     # Verify configuration exists
     local server_config="$CONFIG_DIR/server.conf"
     if [[ ! -f "$server_config" ]]; then
-        error "Server configuration not found: $server_config" "$EXIT_CONFIG_ERROR"
+        # Check fallback location for mounted configs
+        server_config="/etc/sigul/server.conf"
+        if [[ ! -f "$server_config" ]]; then
+            error "Server configuration not found in $CONFIG_DIR/server.conf or /etc/sigul/server.conf" "$EXIT_CONFIG_ERROR"
+        fi
+        debug "Using fallback server configuration: $server_config"
     fi
 
     # Create PID file path
@@ -1749,10 +1760,15 @@ start_bridge() {
         error "sigul_bridge binary not found in PATH" "$EXIT_DEPENDENCY_MISSING"
     fi
 
-    # Verify configuration exists
+    # Verify configuration exists (check primary location and fallback)
     local bridge_config="$CONFIG_DIR/bridge.conf"
     if [[ ! -f "$bridge_config" ]]; then
-        error "Bridge configuration not found: $bridge_config" "$EXIT_CONFIG_ERROR"
+        # Check fallback location for mounted configs
+        bridge_config="/etc/sigul/bridge.conf"
+        if [[ ! -f "$bridge_config" ]]; then
+            error "Bridge configuration not found in $CONFIG_DIR/bridge.conf or /etc/sigul/bridge.conf" "$EXIT_CONFIG_ERROR"
+        fi
+        debug "Using fallback bridge configuration: $bridge_config"
     fi
 
     # Create PID file path
@@ -1794,7 +1810,12 @@ start_client() {
 
     local client_config="$CONFIG_DIR/client.conf"
     if [[ ! -f "$client_config" ]]; then
-        error "Client configuration not found: $client_config" "$EXIT_CONFIG_ERROR"
+        # Check fallback location for mounted configs
+        client_config="/etc/sigul/client.conf"
+        if [[ ! -f "$client_config" ]]; then
+            error "Client configuration not found in $CONFIG_DIR/client.conf or /etc/sigul/client.conf" "$EXIT_CONFIG_ERROR"
+        fi
+        debug "Using fallback client configuration: $client_config"
     fi
 
     log "Client setup completed successfully"
