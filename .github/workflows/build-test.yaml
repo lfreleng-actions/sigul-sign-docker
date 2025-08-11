@@ -70,19 +70,19 @@ jobs:
         include:
           - component: 'client'
             platform: 'linux/amd64'
-            runner: ubuntu-latest
+            runner: ubuntu-24.04
           - component: 'client'
             platform: 'linux/arm64'
             runner: ubuntu-24.04-arm
           - component: 'server'
             platform: 'linux/amd64'
-            runner: ubuntu-latest
+            runner: ubuntu-24.04
           - component: 'server'
             platform: 'linux/arm64'
             runner: ubuntu-24.04-arm
           - component: 'bridge'
             platform: 'linux/amd64'
-            runner: ubuntu-latest
+            runner: ubuntu-24.04
           - component: 'bridge'
             platform: 'linux/arm64'
             runner: ubuntu-24.04-arm

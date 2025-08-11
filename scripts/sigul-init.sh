@@ -398,11 +398,15 @@ validate_directories() {
     done
 
     # Validate specific role directories exist
-    local role_log_dir="$LOGS_DIR/$SIGUL_ROLE"
     local role_nss_dir="$NSS_DIR/$SIGUL_ROLE"
 
-    if [[ ! -d "$role_log_dir" ]]; then
-        error "Role-specific log directory missing: $role_log_dir" $EXIT_VALIDATION_FAILED
+    # Only validate log directories for server and bridge (daemons that write log files)
+    # Client logs go to stderr/stdout and don't need a log directory
+    if [[ "$SIGUL_ROLE" == "server" || "$SIGUL_ROLE" == "bridge" ]]; then
+        local role_log_dir="$LOGS_DIR/$SIGUL_ROLE"
+        if [[ ! -d "$role_log_dir" ]]; then
+            error "Role-specific log directory missing: $role_log_dir" $EXIT_VALIDATION_FAILED
+        fi
     fi
 
     if [[ ! -d "$role_nss_dir" ]]; then
