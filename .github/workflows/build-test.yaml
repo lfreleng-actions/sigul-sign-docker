@@ -654,7 +654,8 @@ jobs:
              [ -f "/tmp/client-linux-amd64.tar" ]; then
             echo "Pushing AMD64 image..."
             # shellcheck disable=SC2043
-            for tag in ${{ steps.meta.outputs.tags }}; do
+            readarray -t tags <<< "${{ steps.meta.outputs.tags }}"
+            for tag in "${tags[@]}"; do
               docker tag client:linux-amd64 "${tag}-amd64"
               docker push "${tag}-amd64"
             done
@@ -664,7 +665,8 @@ jobs:
              [ -f "/tmp/client-linux-arm64.tar" ]; then
             echo "Pushing ARM64 image..."
             # shellcheck disable=SC2043
-            for tag in ${{ steps.meta.outputs.tags }}; do
+            readarray -t tags <<< "${{ steps.meta.outputs.tags }}"
+            for tag in "${tags[@]}"; do
               docker tag client:linux-arm64 "${tag}-arm64"
               docker push "${tag}-arm64"
             done
@@ -672,7 +674,8 @@ jobs:
 
           # Create and push multi-platform manifests
           # shellcheck disable=SC2043
-          for tag in ${{ steps.meta.outputs.tags }}; do
+          readarray -t tags <<< "${{ steps.meta.outputs.tags }}"
+          for tag in "${tags[@]}"; do
             echo "Creating manifest for: $tag"
 
             manifest_args=()
@@ -706,7 +709,8 @@ jobs:
         run: |
           echo "=== Verifying published multi-platform images ==="
           # shellcheck disable=SC2043
-          for tag in ${{ steps.meta.outputs.tags }}; do
+          readarray -t tags <<< "${{ steps.meta.outputs.tags }}"
+          for tag in "${tags[@]}"; do
             echo "Inspecting manifest for: ${tag}"
             docker manifest inspect "${tag}" || echo "Failed to inspect ${tag}"
 
@@ -923,7 +927,10 @@ jobs:
         # yamllint disable-line rule:line-length
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
         with:
-          name: 'sigul-infrastructure-config'
+          name: >-
+            sigul-infrastructure-config-${{
+              steps.runner-arch.outputs.platform-id
+            }}
           path: |
             pki/
             configs/
@@ -956,11 +963,38 @@ jobs:
         # yamllint disable-line rule:line-length
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
+      - name: 'Detect runner architecture'
+        id: runner-arch
+        shell: bash
+        run: |
+          # Detect the runner architecture
+          ARCH=$(uname -m)
+          case $ARCH in
+            x86_64)
+              PLATFORM_ID="linux-amd64"
+              DOCKER_PLATFORM="linux/amd64"
+              ;;
+            aarch64|arm64)
+              PLATFORM_ID="linux-arm64"
+              DOCKER_PLATFORM="linux/arm64"
+              ;;
+            *)
+              echo "❌ Unsupported architecture: $ARCH"
+              exit 1
+              ;;
+          esac
+          echo "platform-id=${PLATFORM_ID}" >> "$GITHUB_OUTPUT"
+          echo "docker-platform=${DOCKER_PLATFORM}" >> "$GITHUB_OUTPUT"
+          echo "📍 Detected runner architecture: $ARCH -> $PLATFORM_ID"
+
       - name: 'Download infrastructure config artifact'
         # yamllint disable-line rule:line-length
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4.3.0
         with:
-          name: 'sigul-infrastructure-config'
+          name: >-
+            sigul-infrastructure-config-${{
+              steps.runner-arch.outputs.platform-id
+            }}
 
       - name: 'Set up Docker Buildx'
         # yamllint disable-line rule:line-length
@@ -970,28 +1004,31 @@ jobs:
         # yamllint disable-line rule:line-length
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4.3.0
         with:
-          name: 'client-linux-amd64-image'
+          name: 'client-${{ steps.runner-arch.outputs.platform-id }}-image'
           path: /tmp
 
       - name: 'Load Sigul Client container'
         shell: bash
         run: |
-          if [ -f "/tmp/client-linux-amd64.tar" ]; then
-            echo "Loading Sigul client image..."
-            docker load --input /tmp/client-linux-amd64.tar
+          PLATFORM_ID="${{ steps.runner-arch.outputs.platform-id }}"
+          CLIENT_TAR_FILE="/tmp/client-${PLATFORM_ID}.tar"
+          if [ -f "${CLIENT_TAR_FILE}" ]; then
+            echo "Loading Sigul client image for ${PLATFORM_ID}..."
+            docker load --input "${CLIENT_TAR_FILE}"
             # Tag the loaded image appropriately
             docker tag "$(docker images --format "{{.Repository}}:{{.Tag}}" |\
-              head -1)" client-linux-amd64-image:test
+              head -1)" "client-${PLATFORM_ID}-image:test"
             echo "✅ Sigul client image loaded and tagged"
           else
-            echo "❌ Client image artifact not found"
+            echo "❌ Client image artifact not found: ${CLIENT_TAR_FILE}"
             exit 1
           fi
 
       - name: 'Run integration tests'
         shell: bash
         env:
-          SIGUL_CLIENT_IMAGE: client-linux-amd64-image:test
+          SIGUL_CLIENT_IMAGE: >-
+            client-${{ steps.runner-arch.outputs.platform-id }}-image:test
         run: |
           echo 'Running Sigul integration tests...'
           chmod +x scripts/run-integration-tests.sh
