@@ -34,9 +34,9 @@ services:
     # The PKI certificates already include the correct service names as SANs
     environment:
       # NSS Database password for secure operation
-      NSS_PASSWORD: ${NSS_PASSWORD:-sigul_nss_ephemeral}
+      NSS_PASSWORD: ${NSS_PASSWORD:-auto_generated_ephemeral}
       # Admin user configuration
-      SIGUL_ADMIN_PASSWORD: ${SIGUL_ADMIN_PASSWORD:-sigul_admin_ephemeral}
+      SIGUL_ADMIN_PASSWORD: ${SIGUL_ADMIN_PASSWORD:-auto_generated_ephemeral}
       SIGUL_ADMIN_USER: ${SIGUL_ADMIN_USER:-admin}
       # Skip admin user creation to get server running
       SIGUL_SKIP_ADMIN_USER: ${SIGUL_SKIP_ADMIN_USER:-true}
@@ -82,7 +82,7 @@ services:
       SIGUL_BRIDGE_HOST: 0.0.0.0
       SIGUL_BRIDGE_PORT: 44334
       # NSS Database password for secure operation
-      NSS_PASSWORD: ${NSS_PASSWORD:-sigul_nss_ephemeral}
+      NSS_PASSWORD: ${NSS_PASSWORD:-auto_generated_ephemeral}
       # Override init script behavior for better GitHub Actions compatibility
       SIGUL_SKIP_CONFIG_WRITE: "true"
     volumes:
@@ -126,7 +126,7 @@ services:
       SIGUL_BRIDGE_HOST: sigul-bridge
       SIGUL_BRIDGE_PORT: 44334
       # NSS Database password for secure operation
-      NSS_PASSWORD: ${NSS_PASSWORD:-sigul_nss_ephemeral}
+      NSS_PASSWORD: ${NSS_PASSWORD:-auto_generated_ephemeral}
       DEBUG: ${DEBUG:-false}
     volumes:
       - ./test-workspace:/workspace:rw

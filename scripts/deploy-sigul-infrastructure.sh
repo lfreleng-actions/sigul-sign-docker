@@ -545,6 +545,102 @@ load_infrastructure_images() {
     success "Infrastructure image loading completed"
 }
 
+# Export certificates from containers to host PKI directory for integration tests
+export_certificates_from_containers() {
+    log "Exporting certificates from containers to host PKI directory..."
+
+    local pki_dir="${PROJECT_ROOT}/pki"
+    mkdir -p "$pki_dir"
+
+    # Wait a moment for containers to fully initialize
+    sleep 5
+
+    # Export certificates from server container
+    if docker ps --format "{{.Names}}" | grep -q "sigul-server"; then
+        verbose "Exporting certificates from sigul-server container..."
+
+        # Export CA certificate
+        if docker exec sigul-server test -f /var/sigul/secrets/certificates/ca.crt; then
+            docker cp sigul-server:/var/sigul/secrets/certificates/ca.crt "$pki_dir/"
+            verbose "Exported ca.crt"
+        fi
+
+        # Export server certificate
+        if docker exec sigul-server test -f /var/sigul/secrets/certificates/server.crt; then
+            docker cp sigul-server:/var/sigul/secrets/certificates/server.crt "$pki_dir/"
+            verbose "Exported server.crt"
+        fi
+
+        # Export server private key
+        if docker exec sigul-server test -f /var/sigul/secrets/certificates/server-key.pem; then
+            docker cp sigul-server:/var/sigul/secrets/certificates/server-key.pem "$pki_dir/"
+            verbose "Exported server-key.pem"
+        fi
+    else
+        warn "Sigul server container not found for certificate export"
+    fi
+
+    # Export certificates from bridge container
+    if docker ps --format "{{.Names}}" | grep -q "sigul-bridge"; then
+        verbose "Exporting certificates from sigul-bridge container..."
+
+        # Export bridge certificate
+        if docker exec sigul-bridge test -f /var/sigul/secrets/certificates/bridge.crt; then
+            docker cp sigul-bridge:/var/sigul/secrets/certificates/bridge.crt "$pki_dir/"
+            verbose "Exported bridge.crt"
+        fi
+
+        # Export bridge private key
+        if docker exec sigul-bridge test -f /var/sigul/secrets/certificates/bridge-key.pem; then
+            docker cp sigul-bridge:/var/sigul/secrets/certificates/bridge-key.pem "$pki_dir/"
+            verbose "Exported bridge-key.pem"
+        fi
+    else
+        warn "Sigul bridge container not found for certificate export"
+    fi
+
+    # Generate client certificates if they don't exist
+    if [[ ! -f "$pki_dir/client.crt" ]]; then
+        verbose "Generating client certificate for integration tests..."
+
+        # Use server container to generate client cert (it has all the tools)
+        docker exec sigul-server bash -c "
+            cd /var/sigul/secrets/certificates
+            if [[ ! -f client-key.pem ]]; then
+                openssl genrsa -out client-key.pem 2048
+            fi
+            if [[ ! -f client.crt ]]; then
+                openssl req -new -x509 -key client-key.pem -out client.crt -days 365 \
+                    -subj '/C=US/ST=Test/L=Test/O=Sigul Test/OU=Testing/CN=client.sigul.test'
+            fi
+        "
+
+        # Export client certificates
+        if docker exec sigul-server test -f /var/sigul/secrets/certificates/client.crt; then
+            docker cp sigul-server:/var/sigul/secrets/certificates/client.crt "$pki_dir/"
+            verbose "Exported client.crt"
+        fi
+
+        if docker exec sigul-server test -f /var/sigul/secrets/certificates/client-key.pem; then
+            docker cp sigul-server:/var/sigul/secrets/certificates/client-key.pem "$pki_dir/"
+            verbose "Exported client-key.pem"
+        fi
+    fi
+
+    # List exported certificates
+    if [[ -d "$pki_dir" ]]; then
+        local cert_count
+        cert_count=$(find "$pki_dir" -name "*.crt" -o -name "*.pem" | wc -l)
+        success "Exported $cert_count certificate files to $pki_dir"
+        verbose "PKI directory contents:"
+        find "$pki_dir" -type f -exec ls -la {} \; 2>/dev/null | while read -r line; do
+            verbose "  $line"
+        done
+    else
+        warn "PKI directory was not created"
+    fi
+}
+
 # Deploy Sigul services with comprehensive monitoring
 deploy_sigul_services() {
     log "Deploying Sigul server and bridge with comprehensive monitoring..."
@@ -558,8 +654,18 @@ deploy_sigul_services() {
     export SIGUL_BRIDGE_IMAGE="bridge-${platform_id}-image:test"
     # SIGUL_CLIENT_IMAGE removed from infrastructure deployment (only needed for integration tests)
 
-    # Explicitly skip admin user creation to prevent interactive password prompts
-    export SIGUL_SKIP_ADMIN_USER="true"
+    # Enable admin user creation for functional testing
+    export SIGUL_SKIP_ADMIN_USER="false"
+    # Generate ephemeral admin password for testing
+    local ephemeral_admin_password
+    ephemeral_admin_password=$(openssl rand -base64 16)
+    export SIGUL_ADMIN_PASSWORD="$ephemeral_admin_password"
+    verbose "Generated ephemeral admin password for deployment"
+
+    # Store password for integration tests to use
+    mkdir -p "${PROJECT_ROOT}/test-artifacts"
+    echo "$ephemeral_admin_password" > "${PROJECT_ROOT}/test-artifacts/admin-password"
+    chmod 600 "${PROJECT_ROOT}/test-artifacts/admin-password"
 
     verbose "Deploying Sigul services for platform: $platform_id"
     verbose "Using server image: ${SIGUL_SERVER_IMAGE}"
@@ -796,6 +902,10 @@ deploy_sigul_services() {
     fi
 
     success "Sigul bridge deployed and ready (took $((attempt-1)) attempts)"
+
+    # Export certificates from containers to host pki directory for integration tests
+    export_certificates_from_containers
+
     success "All Sigul services deployed successfully"
 }
 

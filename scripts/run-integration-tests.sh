@@ -60,6 +60,44 @@ detect_and_set_environment() {
     verbose "Platform detection completed: ${platform_id}"
 }
 
+# Function to load ephemeral passwords generated during deployment
+load_ephemeral_passwords() {
+    local admin_password_file="${PROJECT_ROOT}/test-artifacts/admin-password"
+
+    # Load admin password
+    if [[ -f "$admin_password_file" ]]; then
+        EPHEMERAL_ADMIN_PASSWORD=$(cat "$admin_password_file")
+        verbose "Loaded ephemeral admin password from deployment"
+    else
+        error "Ephemeral admin password not found. Deployment may have failed."
+        return 1
+    fi
+
+    # Generate ephemeral test user password
+    EPHEMERAL_TEST_PASSWORD=$(openssl rand -base64 12)
+    verbose "Generated ephemeral test user password"
+
+    return 0
+}
+
+# Function to detect the Docker network name created by docker-compose
+get_sigul_network_name() {
+    local compose_file="${PROJECT_ROOT}/docker-compose.sigul.yml"
+    local network_name
+
+    # Try to find the network created by docker-compose
+    network_name=$(docker network ls --filter "name=sigul" --format "{{.Name}}" | head -1)
+
+    if [[ -n "$network_name" ]]; then
+        echo "$network_name"
+        return 0
+    fi
+
+    # Fallback: construct expected network name
+    local project_name="sigul-sign-docker"
+    echo "${project_name}_sigul-network"
+}
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -307,14 +345,18 @@ test_user_key_creation() {
 
     # Create integration test user
     verbose "Creating integration test user..."
-    if docker run --rm --network host \
+    local network_name
+    network_name=$(get_sigul_network_name)
+    verbose "Using Docker network: $network_name"
+
+    if docker run --rm --network "$network_name" \
         -v "${PROJECT_ROOT}/configs:/etc/sigul:ro" \
         -v "${PROJECT_ROOT}/pki:/opt/sigul/pki:ro" \
         -e SIGUL_MOCK_MODE=false \
         "$SIGUL_CLIENT_IMAGE" \
         sigul -c /etc/sigul/client.conf new-user \
-        --admin-name admin --admin-password admin_password \
-        integration-tester test_password 2>/dev/null; then
+        --admin-name admin --admin-password "$EPHEMERAL_ADMIN_PASSWORD" \
+        integration-tester "$EPHEMERAL_TEST_PASSWORD" 2>/dev/null; then
 
         verbose "User creation succeeded"
     else
@@ -324,13 +366,13 @@ test_user_key_creation() {
 
     # Create signing key
     verbose "Creating test signing key..."
-    if docker run --rm --network host \
+    if docker run --rm --network "$network_name" \
         -v "${PROJECT_ROOT}/configs:/etc/sigul:ro" \
         -v "${PROJECT_ROOT}/pki:/opt/sigul/pki:ro" \
         -e SIGUL_MOCK_MODE=false \
         "$SIGUL_CLIENT_IMAGE" \
         sigul -c /etc/sigul/client.conf new-key \
-        --key-admin integration-tester --key-admin-password test_password \
+        --key-admin integration-tester --key-admin-password "$EPHEMERAL_TEST_PASSWORD" \
         test-signing-key 2048 2>/dev/null; then
 
         verbose "Key creation succeeded"
@@ -339,13 +381,13 @@ test_user_key_creation() {
         # Key might already exist, try to continue with existing key
         verbose "Key creation failed (key may already exist)"
         # Test if key exists by trying to list it
-        if docker run --rm --network host \
+        if docker run --rm --network "$network_name" \
             -v "${PROJECT_ROOT}/configs:/etc/sigul:ro" \
             -v "${PROJECT_ROOT}/pki:/opt/sigul/pki:ro" \
             -e SIGUL_MOCK_MODE=false \
             "$SIGUL_CLIENT_IMAGE" \
             sigul -c /etc/sigul/client.conf list-keys \
-            --password test_password 2>/dev/null | grep -q "test-signing-key"; then
+            --password "$EPHEMERAL_TEST_PASSWORD" 2>/dev/null | grep -q "test-signing-key"; then
             verbose "Test signing key already exists, proceeding with tests"
             test_passed "$test_name"
         else
@@ -361,13 +403,16 @@ test_basic_functionality() {
     local test_name="Basic Functionality"
 
     # Test list-keys command
-    if docker run --rm --network host \
+    local network_name
+    network_name=$(get_sigul_network_name)
+
+    if docker run --rm --network "$network_name" \
         -v "${PROJECT_ROOT}/configs:/etc/sigul:ro" \
         -v "${PROJECT_ROOT}/pki:/opt/sigul/pki:ro" \
         -e SIGUL_MOCK_MODE=false \
         "$SIGUL_CLIENT_IMAGE" \
         sigul -c /etc/sigul/client.conf list-keys \
-        --password test_password 2>/dev/null; then
+        --password "$EPHEMERAL_TEST_PASSWORD" 2>/dev/null; then
 
         test_passed "$test_name"
     else
@@ -388,7 +433,10 @@ test_file_signing() {
 
     verbose "Signing file: document1.txt"
     # Sign the file using real Sigul infrastructure
-    if docker run --rm --network host \
+    local network_name
+    network_name=$(get_sigul_network_name)
+
+    if docker run --rm --network "$network_name" \
         -v "${PROJECT_ROOT}/configs:/etc/sigul:ro" \
         -v "${PROJECT_ROOT}/pki:/opt/sigul/pki:ro" \
         -v "${PROJECT_ROOT}:/workspace:rw" \
@@ -396,7 +444,7 @@ test_file_signing() {
         -e SIGUL_MOCK_MODE=false \
         "$SIGUL_CLIENT_IMAGE" \
         sigul -c /etc/sigul/client.conf sign-data \
-        --password test_password \
+        --password "$EPHEMERAL_TEST_PASSWORD" \
         test-signing-key test-workspace/document1.txt 2>/dev/null; then
 
         # Check if signature was created
@@ -431,7 +479,10 @@ test_rpm_signing() {
 
     # Attempt to sign the RPM file
     verbose "Attempting to sign test RPM file..."
-    if docker run --rm --network host \
+    local network_name
+    network_name=$(get_sigul_network_name)
+
+    if docker run --rm --network "$network_name" \
         -v "${PROJECT_ROOT}/configs:/etc/sigul:ro" \
         -v "${PROJECT_ROOT}/pki:/opt/sigul/pki:ro" \
         -v "${PROJECT_ROOT}:/workspace:rw" \
@@ -439,7 +490,7 @@ test_rpm_signing() {
         -e SIGUL_MOCK_MODE=false \
         "$SIGUL_CLIENT_IMAGE" \
         sigul -c /etc/sigul/client.conf sign-rpm \
-        --password test_password \
+        --password "$EPHEMERAL_TEST_PASSWORD" \
         test-signing-key test-workspace/test-package.rpm 2>/dev/null; then
 
         test_passed "$test_name"
@@ -447,13 +498,13 @@ test_rpm_signing() {
         # RPM signing may fail if the file is not a valid RPM, but the command should execute
         warn "RPM signing failed (test file is not a valid RPM package)"
         # Check if the sigul command at least connected to the server
-        if docker run --rm --network host \
+        if docker run --rm --network "$network_name" \
             -v "${PROJECT_ROOT}/configs:/etc/sigul:ro" \
             -v "${PROJECT_ROOT}/pki:/opt/sigul/pki:ro" \
             -e SIGUL_MOCK_MODE=false \
             "$SIGUL_CLIENT_IMAGE" \
             sigul -c /etc/sigul/client.conf list-keys \
-            --password test_password 2>/dev/null >/dev/null; then
+            --password "$EPHEMERAL_TEST_PASSWORD" 2>/dev/null >/dev/null; then
             verbose "Sigul connection works, RPM signing failed due to invalid RPM format"
             test_passed "$test_name"
         else
@@ -474,13 +525,16 @@ test_key_management() {
 
     # List users to verify connectivity and authentication
     verbose "Testing list-users command..."
-    if docker run --rm --network host \
+    local network_name
+    network_name=$(get_sigul_network_name)
+
+    if docker run --rm --network "$network_name" \
         -v "${PROJECT_ROOT}/configs:/etc/sigul:ro" \
         -v "${PROJECT_ROOT}/pki:/opt/sigul/pki:ro" \
         -e SIGUL_MOCK_MODE=false \
         "$SIGUL_CLIENT_IMAGE" \
         sigul -c /etc/sigul/client.conf list-users \
-        --password test_password 2>/dev/null; then
+        --password "$EPHEMERAL_TEST_PASSWORD" 2>/dev/null; then
 
         verbose "List users command succeeded"
     else
@@ -489,7 +543,7 @@ test_key_management() {
 
     # Get public key to verify key management functionality
     verbose "Retrieving public key for test-signing-key..."
-    if docker run --rm --network host \
+    if docker run --rm --network "$network_name" \
         -v "${PROJECT_ROOT}/configs:/etc/sigul:ro" \
         -v "${PROJECT_ROOT}/pki:/opt/sigul/pki:ro" \
         -v "${PROJECT_ROOT}:/workspace:rw" \
@@ -497,7 +551,7 @@ test_key_management() {
         -e SIGUL_MOCK_MODE=false \
         "$SIGUL_CLIENT_IMAGE" \
         sigul -c /etc/sigul/client.conf get-public-key \
-        --password test_password \
+        --password "$EPHEMERAL_TEST_PASSWORD" \
         test-signing-key > public-key.asc 2>/dev/null; then
 
         if [[ -f "${public_key_file}" && -s "${public_key_file}" ]]; then
@@ -532,9 +586,12 @@ test_batch_operations() {
 
     # Sign multiple files using real Sigul infrastructure
     verbose "Signing multiple files in batch operation..."
+    local network_name
+    network_name=$(get_sigul_network_name)
+
     for i in {1..3}; do
         verbose "Signing batch-test-${i}.txt..."
-        if docker run --rm --network host \
+        if docker run --rm --network "$network_name" \
             -v "${PROJECT_ROOT}/configs:/etc/sigul:ro" \
             -v "${PROJECT_ROOT}/pki:/opt/sigul/pki:ro" \
             -v "${PROJECT_ROOT}:/workspace:rw" \
@@ -542,7 +599,7 @@ test_batch_operations() {
             -e SIGUL_MOCK_MODE=false \
             "$SIGUL_CLIENT_IMAGE" \
             sigul -c /etc/sigul/client.conf sign-data \
-            --password test_password \
+            --password "$EPHEMERAL_TEST_PASSWORD" \
             test-signing-key "test-workspace/batch-test-${i}.txt" 2>/dev/null; then
 
             verbose "Batch file ${i} signed successfully"
@@ -730,6 +787,12 @@ main() {
 
     # Ensure all required environment variables are set
     detect_and_set_environment
+
+    # Load ephemeral passwords generated during deployment
+    if ! load_ephemeral_passwords; then
+        error "Failed to load ephemeral passwords"
+        exit 1
+    fi
 
     check_prerequisites
 

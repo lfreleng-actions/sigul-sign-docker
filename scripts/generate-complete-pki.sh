@@ -32,10 +32,10 @@ SERVER_DAYS=365
 CLIENT_DAYS=365
 RSA_BITS=2048
 
-# Test passwords and identities
-CA_PASS="sigul_ca_test_password"
-CLIENT_PASS="sigul_client_test_password"
-GPG_ENCRYPT_PASS="integration_test_password"
+# Generate ephemeral passwords for security
+CA_PASS=$(openssl rand -base64 16)
+CLIENT_PASS=$(openssl rand -base64 16)
+GPG_ENCRYPT_PASS=$(openssl rand -base64 16)
 
 # Subject configurations
 CA_SUBJECT="/C=US/ST=Test/L=TestCity/O=Sigul Test CA/CN=Sigul Test Root CA"
@@ -197,7 +197,7 @@ log "Created client configuration"
 # Create password file for client
 echo "$CLIENT_PASS" > "$TEMP_DIR/client-pki/.sigul/password"
 chmod 600 "$TEMP_DIR/client-pki/.sigul/password"
-log "Created client password file"
+log "Created client password file with ephemeral password"
 
 log "=== Step 6: Generate Test Signing Key ==="
 
@@ -345,7 +345,7 @@ Example workflow usage:
   uses: ./
   with:
     sigul-pki: \${{ steps.generate-real-pki.outputs.encrypted-pki }}
-    sigul-pass: 'integration_test_password'
+    sigul-pass: \${{ steps.generate-real-pki.outputs.ephemeral-password }}
 \`\`\`
 
 ## Security Note
