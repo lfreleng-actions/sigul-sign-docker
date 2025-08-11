@@ -210,7 +210,7 @@ jobs:
           retention-days: 7
 
   ### Test Sigul Client Container ###
-  test-docker:
+  client-mock-test:
     name: "Test Client: ${{ matrix.platform }}"
     runs-on: ${{ matrix.runner }}
     permissions:
@@ -490,7 +490,7 @@ jobs:
       contents: read
       packages: write
     timeout-minutes: 20
-    needs: [build-containers, test-docker]
+    needs: [build-containers, client-mock-test]
     if: github.event_name != 'pull_request'
     steps:
       # Harden the runner used by this workflow
@@ -667,7 +667,7 @@ jobs:
             fi
           done
 
-  test-sigul-stack:
+  sigul-stack-test:
     name: 'Deploy/Test Stack: ${{ matrix.platform }}'
     runs-on: ${{ matrix.runner }}
     permissions:
@@ -917,7 +917,7 @@ jobs:
     permissions:
       contents: read
     timeout-minutes: 5
-    needs: [test-sigul-stack]
+    needs: [sigul-stack-test]
     if: always()
     steps:
       # Harden the runner used by this workflow
@@ -956,7 +956,7 @@ jobs:
   summary:
     name: 'Build Summary'
     runs-on: 'ubuntu-latest'
-    needs: [build-containers, test-docker, publish-ghcr, test-sigul-stack]
+    needs: [build-containers, client-mock-test, publish-ghcr, sigul-stack-test]
     if: always()
     timeout-minutes: 1
     # yamllint disable rule:line-length
@@ -974,15 +974,15 @@ jobs:
 
             # Note: In real implementation, check actual job statuses
             echo "| linux/amd64 | ${{ needs.build-containers.result }} |" \
-              " ${{ needs.test-docker.result }} | ${{ needs.test-sigul-stack.result }} |" \
-              " ${{ needs.test-sigul-stack.result }} | Complete |"
+              " ${{ needs.client-mock-test.result }} | ${{ needs.sigul-stack-test.result }} |" \
+              " ${{ needs.sigul-stack-test.result }} | Complete |"
             echo "| linux/arm64 | ${{ needs.build-containers.result }} |" \
-              " ${{ needs.test-docker.result }} | ${{ needs.test-sigul-stack.result }} |" \
-              " ${{ needs.test-sigul-stack.result }} | Complete |"
+              " ${{ needs.client-mock-test.result }} | ${{ needs.sigul-stack-test.result }} |" \
+              " ${{ needs.sigul-stack-test.result }} | Complete |"
             echo ""
 
             echo "### Stack Deployment & Integration Tests"
-            echo "- **Status**: ${{ needs.test-sigul-stack.result }}"
+            echo "- **Status**: ${{ needs.sigul-stack-test.result }}"
             echo "- **Includes**: Stack deployment, infrastructure setup, integration testing"
             echo ""
 

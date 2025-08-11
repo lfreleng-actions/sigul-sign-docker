@@ -1182,7 +1182,15 @@ validate_configuration() {
                 error "Client configuration missing [client] section"
             fi
             # Check for required client settings
-            local required_settings=("bridge-hostname" "server-hostname" "nss-dir")
+            local required_settings=("bridge-hostname" "server-hostname")
+
+            # Check for NSS section and nss-dir setting separately
+            if ! grep -q "^\[nss\]" "$config_file"; then
+                error "Client configuration missing [nss] section"
+            fi
+            if ! grep -q "^nss-dir[[:space:]]*=" "$config_file"; then
+                error "Configuration missing required setting: nss-dir"
+            fi
             ;;
         *)
             error "Unknown role for configuration validation: $role"
