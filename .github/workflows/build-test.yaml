@@ -56,7 +56,7 @@ env:
 jobs:
   ### Build Sigul Client Container ###
   build-containers:
-    name: "Build Containers: ${{ matrix.component }} (${{ matrix.platform }})"
+    name: "Build: ${{ matrix.component }} (${{ matrix.platform }})"
     runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
@@ -70,19 +70,19 @@ jobs:
             runner: ubuntu-latest
           - component: 'client'
             platform: 'linux/arm64'
-            runner: ubuntu-24.04-arm
+            runner: ubuntu-latest
           - component: 'server'
             platform: 'linux/amd64'
             runner: ubuntu-latest
           - component: 'server'
             platform: 'linux/arm64'
-            runner: ubuntu-24.04-arm
+            runner: ubuntu-latest
           - component: 'bridge'
             platform: 'linux/amd64'
             runner: ubuntu-latest
           - component: 'bridge'
             platform: 'linux/arm64'
-            runner: ubuntu-24.04-arm
+            runner: ubuntu-latest
     outputs:
       client-amd64-digest: ${{ steps.build-client-amd64.outputs.digest }}
       client-arm64-digest: ${{ steps.build-client-arm64.outputs.digest }}
@@ -222,7 +222,7 @@ jobs:
             runner: ubuntu-latest
             run-mock-tests: true
           - platform: linux/arm64
-            runner: ubuntu-24.04-arm
+            runner: ubuntu-latest
             run-mock-tests: true
     steps:
       # Harden the runner used by this workflow
@@ -678,7 +678,7 @@ jobs:
           - platform: linux/amd64
             runner: ubuntu-latest
           - platform: linux/arm64
-            runner: ubuntu-24.04-arm
+            runner: ubuntu-latest
     outputs:
       server-container: ${{ steps.deploy.outputs.server-container }}
       bridge-container: ${{ steps.deploy.outputs.bridge-container }}
