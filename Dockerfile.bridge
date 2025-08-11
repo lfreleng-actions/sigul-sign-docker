@@ -73,8 +73,10 @@ RUN if getent passwd sigul >/dev/null; then \
     chown sigul:sigul /var/sigul && \
     chmod 755 /var/sigul && \
     # Set proper permissions on PKI files after user creation
-    chmod 644 /workspace/pki/*.crt /workspace/pki/*.conf && \
-    chmod 644 /workspace/pki/*-key.pem && \
+    # Only chmod files that exist (some are generated at runtime)
+    if ls /workspace/pki/*.crt >/dev/null 2>&1; then chmod 644 /workspace/pki/*.crt; fi && \
+    chmod 644 /workspace/pki/*.conf && \
+    if ls /workspace/pki/*-key.pem >/dev/null 2>&1; then chmod 644 /workspace/pki/*-key.pem; fi && \
     chmod +x /workspace/pki/*.sh && \
     chown -R sigul:sigul /workspace/pki/
 
