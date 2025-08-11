@@ -39,7 +39,7 @@ services:
       SIGUL_ADMIN_PASSWORD: ${SIGUL_ADMIN_PASSWORD:-auto_generated_ephemeral}
       SIGUL_ADMIN_USER: ${SIGUL_ADMIN_USER:-admin}
       # Skip admin user creation to get server running
-      SIGUL_SKIP_ADMIN_USER: ${SIGUL_SKIP_ADMIN_USER:-true}
+      SIGUL_SKIP_ADMIN_USER: ${SIGUL_SKIP_ADMIN_USER:-false}
       # Debug mode
       DEBUG: ${DEBUG:-false}
       # Override init script behavior for better GitHub Actions compatibility

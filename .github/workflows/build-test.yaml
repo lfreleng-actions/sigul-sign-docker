@@ -956,7 +956,10 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
         if: always()
         with:
-          name: "integration-test-results-${{ github.run_id }}"
+          name: >-
+            integration-test-results-${{
+              steps.runner-arch.outputs.platform-id
+            }}
           path: |
             test-artifacts/
             *.txt

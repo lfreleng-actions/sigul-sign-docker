@@ -1294,13 +1294,23 @@ setup_admin_user() {
     debug "Admin password file: $admin_password_file"
     debug "SIGUL_ADMIN_PASSWORD env var: ${SIGUL_ADMIN_PASSWORD:+SET}"
 
-    # Check if admin password exists
+    # Check if admin password exists in file or environment variable
     if [[ ! -f "$admin_password_file" ]]; then
-        warn "Admin password file not found: $admin_password_file"
-        debug "Listing contents of secrets directory:"
-        debug "$(find "$SECRETS_DIR" -type f 2>/dev/null | head -10 || echo 'No files found')"
-        log "Skipping admin user creation - password not available"
-        return 0
+        # If password file doesn't exist, try to create it from environment variable
+        if [[ -n "${SIGUL_ADMIN_PASSWORD:-}" ]]; then
+            log "Creating admin password file from environment variable"
+            mkdir -p "$(dirname "$admin_password_file")"
+            echo "$SIGUL_ADMIN_PASSWORD" > "$admin_password_file"
+            chmod 600 "$admin_password_file"
+            debug "Admin password file created: $admin_password_file"
+        else
+            warn "Admin password file not found and SIGUL_ADMIN_PASSWORD not set"
+            debug "Admin password file: $admin_password_file"
+            debug "Listing contents of secrets directory:"
+            debug "$(find "$SECRETS_DIR" -type f 2>/dev/null | head -10 || echo 'No files found')"
+            log "Skipping admin user creation - password not available"
+            return 0
+        fi
     fi
 
     local admin_password
