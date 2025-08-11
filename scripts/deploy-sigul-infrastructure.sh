@@ -445,19 +445,53 @@ load_infrastructure_images() {
         debug "  Artifact file: $artifact_file"
 
         if [[ -f "$artifact_file" ]]; then
+            # Show current images before loading for debugging
+            debug "Images before loading:"
+            debug "$(docker images --format 'table {{.Repository}}\t{{.Tag}}\t{{.ID}}' | head -10)"
             verbose "Loading $target_image from artifact: $artifact_file"
 
-            if docker load --input "$artifact_file" >/dev/null 2>&1; then
-                # Get the loaded image name and tag it appropriately
-                local loaded_image
-                loaded_image=$(docker images --format "{{.Repository}}:{{.Tag}}" | head -1)
+            # Capture the docker load output to identify the actual loaded image
+            local load_output
+            if load_output=$(docker load --input "$artifact_file" 2>&1); then
+                debug "Docker load output: $load_output"
 
-                if [[ -n "$loaded_image" && "$loaded_image" != "$target_image" ]]; then
-                    debug "Tagging loaded image '$loaded_image' as '$target_image'"
-                    docker tag "$loaded_image" "$target_image"
+                # Extract the loaded image name from docker load output
+                # Format: "Loaded image: <image_name>"
+                local loaded_image
+                loaded_image=$(echo "$load_output" | grep "^Loaded image:" | head -1 | sed 's/^Loaded image: //')
+
+                if [[ -n "$loaded_image" ]]; then
+                    debug "Identified loaded image: $loaded_image"
+
+                    # Tag it with our expected name if different
+                    if [[ "$loaded_image" != "$target_image" ]]; then
+                        debug "Tagging loaded image '$loaded_image' as '$target_image'"
+                        docker tag "$loaded_image" "$target_image"
+                    fi
+                else
+                    warn "Could not identify loaded image from output, checking expected patterns"
+                    # Fallback: try common patterns based on target image
+                    if [[ "$target_image" == "server-"* ]]; then
+                        local base_name="${target_image%-*-image:test}"
+                        local platform="${base_name#server-}"
+                        loaded_image="server:${platform}"
+                    elif [[ "$target_image" == "bridge-"* ]]; then
+                        local base_name="${target_image%-*-image:test}"
+                        local platform="${base_name#bridge-}"
+                        loaded_image="bridge:${platform}"
+                    fi
+
+                    if [[ -n "$loaded_image" ]] && docker image inspect "$loaded_image" >/dev/null 2>&1; then
+                        debug "Found expected image pattern: $loaded_image"
+                        docker tag "$loaded_image" "$target_image"
+                    fi
                 fi
 
-                # Verify the image exists
+                # Show current images after loading for debugging
+                debug "Images after loading and tagging:"
+                debug "$(docker images --format 'table {{.Repository}}\t{{.Tag}}\t{{.ID}}' | grep -E '(server|bridge|client)' | head -10)"
+
+                # Verify the target image exists
                 if docker image inspect "$target_image" >/dev/null 2>&1; then
                     success "✅ Successfully loaded: $target_image"
                     loaded_images+=("$target_image")
@@ -467,6 +501,7 @@ load_infrastructure_images() {
                 fi
             else
                 error "❌ Failed to load image from artifact: $artifact_file"
+                error "Docker load error: $load_output"
                 failed_images+=("$target_image")
             fi
         else

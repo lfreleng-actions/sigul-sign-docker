@@ -52,6 +52,7 @@ services:
       - ./configs:/etc/sigul:ro
       # Mount unified initialization script with execute permissions
       - ./scripts/sigul-init.sh:/usr/local/bin/sigul-init.sh:ro
+
     # Server connects to bridge - no ports exposed
     # healthcheck:
     #   test: ["CMD-SHELL", "nc -z 0.0.0.0 44333 || exit 1"]
@@ -91,6 +92,7 @@ services:
       - ./configs:/etc/sigul:ro
       # Mount unified initialization script with execute permissions
       - ./scripts/sigul-init.sh:/usr/local/bin/sigul-init.sh:ro
+
     ports:
       - "44334:44334"
     # Independent startup - no dependencies
