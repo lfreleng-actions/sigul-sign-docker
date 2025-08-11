@@ -241,6 +241,35 @@ maintainable architecture:
 - Proper cleanup to reduce final image size
 - Creates identical functionality to x86_64 builds
 
+### Network Architecture
+
+**Important:** Sigul enforces fixed Bridge networking behavior:
+
+- **Bridge Bind Address**: The Sigul bridge **ALWAYS** binds to `0.0.0.0`
+  (all interfaces)
+- **No Configuration Option**: No Sigul configuration parameter exists to
+  change the bind address
+- **Source Code Reference**:
+  `sock.bind(nss.io.NetworkAddress(nss.io.PR_IpAddrAny, port))` in
+  `/usr/share/sigul/bridge.py`
+- **Security Implications**: Bridge will listen on all network interfaces;
+  use container networking or firewall rules for access control
+
+**Connection Flow:**
+
+```text
+Client → Bridge (port 44334) → Server (port 44333)
+```
+
+**Port Configuration:**
+
+- `client-listen-port`: Port where bridge listens for client connections
+  (default: 44334)
+- `server-listen-port`: Port where bridge listens for server connections
+  (default: 44333)
+- `bridge-hostname`: Hostname clients/servers use to connect to bridge
+  (default: sigul-bridge)
+
 ### Container Components
 
 #### Sigul Client (`Dockerfile.client`)

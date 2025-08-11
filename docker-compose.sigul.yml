@@ -78,9 +78,11 @@ services:
     user: "1000:1000"  # Use consistent UID/GID matching built-in sigul user
     # Remove extra_hosts to allow Docker's natural DNS resolution
     # The PKI certificates already include the correct service names as SANs
+    # NOTE: Sigul bridge ALWAYS binds to 0.0.0.0 (all interfaces) - hardcoded in source
+    # Bridge listens on two ports: client-listen-port and server-listen-port
     environment:
-      SIGUL_BRIDGE_HOST: 0.0.0.0
-      SIGUL_BRIDGE_PORT: 44334
+      SIGUL_BRIDGE_CLIENT_PORT: 44334
+      SIGUL_BRIDGE_SERVER_PORT: 44333
       # NSS Database password for secure operation
       NSS_PASSWORD: ${NSS_PASSWORD:-auto_generated_ephemeral}
       # Override init script behavior for better GitHub Actions compatibility
