@@ -942,6 +942,10 @@ jobs:
         env:
           SIGUL_CLIENT_IMAGE: >-
             client-${{ steps.runner-arch.outputs.platform-id }}-image:test
+          SIGUL_SERVER_IMAGE: >-
+            server-${{ steps.runner-arch.outputs.platform-id }}-image:test
+          SIGUL_BRIDGE_IMAGE: >-
+            bridge-${{ steps.runner-arch.outputs.platform-id }}-image:test
         run: |
           echo 'Running Sigul integration tests...'
           chmod +x scripts/run-integration-tests.sh
