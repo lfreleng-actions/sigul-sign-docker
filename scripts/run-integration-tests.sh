@@ -108,14 +108,15 @@ start_client_container() {
     # Remove any existing client container
     docker rm -f "$client_container_name" 2>/dev/null || true
 
-    # Start the client container with proper initialization
+    # Start the client container with unified initialization
     if ! docker run -d --name "$client_container_name" \
         --network "$network_name" \
-        -v "${PROJECT_ROOT}/configs:/etc/sigul:ro" \
-        -v "${PROJECT_ROOT}/pki:/opt/sigul/pki:ro" \
+        --user sigul \
         -v "${PROJECT_ROOT}:/workspace:rw" \
         -w /workspace \
         -e SIGUL_ROLE=client \
+        -e SIGUL_BRIDGE_HOSTNAME=sigul-bridge \
+        -e SIGUL_BRIDGE_CLIENT_PORT=44334 \
         -e SIGUL_MOCK_MODE=false \
         -e NSS_PASSWORD="${EPHEMERAL_ADMIN_PASSWORD}" \
         -e DEBUG=true \
@@ -145,16 +146,16 @@ start_client_container() {
 
         # Verify basic client functionality
         verbose "Testing basic client configuration..."
-        if docker exec "$client_container_name" test -f /etc/sigul/client.conf; then
+        if docker exec "$client_container_name" test -f /var/sigul/config/client.conf; then
             verbose "Client configuration file found"
         else
             warn "Client configuration file not found"
         fi
 
-        if docker exec "$client_container_name" test -f /opt/sigul/pki/ca.crt; then
-            verbose "CA certificate found"
+        if docker exec "$client_container_name" test -d /var/sigul/nss/client; then
+            verbose "Client NSS database found"
         else
-            warn "CA certificate not found"
+            warn "Client NSS database not found"
         fi
 
         return 0
@@ -451,7 +452,7 @@ test_user_key_creation() {
     verbose "Using Docker network: $network_name"
 
     if run_sigul_client_cmd \
-        sigul -c /etc/sigul/client.conf new-user \
+        sigul -c /var/sigul/config/client.conf new-user \
         --admin-name admin --admin-password "$EPHEMERAL_ADMIN_PASSWORD" \
         integration-tester "$EPHEMERAL_TEST_PASSWORD" 2>/dev/null; then
 
@@ -464,7 +465,7 @@ test_user_key_creation() {
     # Create signing key
     verbose "Creating test signing key..."
     if run_sigul_client_cmd \
-        sigul -c /etc/sigul/client.conf new-key \
+        sigul -c /var/sigul/config/client.conf new-key \
         --key-admin integration-tester --key-admin-password "$EPHEMERAL_TEST_PASSWORD" \
         test-signing-key 2048 2>/dev/null; then
 
@@ -475,7 +476,7 @@ test_user_key_creation() {
         verbose "Key creation failed (key may already exist)"
         # Test if key exists by trying to list it
         if run_sigul_client_cmd \
-            sigul -c /etc/sigul/client.conf list-keys \
+            sigul -c /var/sigul/config/client.conf list-keys \
             --password "$EPHEMERAL_TEST_PASSWORD" 2>/dev/null | grep -q "test-signing-key"; then
             verbose "Test signing key already exists, proceeding with tests"
             test_passed "$test_name"
@@ -496,7 +497,7 @@ test_basic_functionality() {
     network_name=$(get_sigul_network_name)
 
     if run_sigul_client_cmd \
-        sigul -c /etc/sigul/client.conf list-keys \
+        sigul -c /var/sigul/config/client.conf list-keys \
         --password "$EPHEMERAL_TEST_PASSWORD" 2>/dev/null; then
 
         test_passed "$test_name"
@@ -522,7 +523,7 @@ test_file_signing() {
     network_name=$(get_sigul_network_name)
 
     if run_sigul_client_cmd \
-        sigul -c /etc/sigul/client.conf sign-data \
+        sigul -c /var/sigul/config/client.conf sign-data \
         --password "$EPHEMERAL_TEST_PASSWORD" \
         test-signing-key test-workspace/document1.txt 2>/dev/null; then
 
@@ -562,7 +563,7 @@ test_rpm_signing() {
     network_name=$(get_sigul_network_name)
 
     if run_sigul_client_cmd \
-        sigul -c /etc/sigul/client.conf sign-rpm \
+        sigul -c /var/sigul/config/client.conf sign-rpm \
         --password "$EPHEMERAL_TEST_PASSWORD" \
         test-signing-key test-workspace/test-package.rpm 2>/dev/null; then
 
@@ -572,7 +573,7 @@ test_rpm_signing() {
         warn "RPM signing failed (test file is not a valid RPM package)"
         # Check if the sigul command at least connected to the server
         if run_sigul_client_cmd \
-            sigul -c /etc/sigul/client.conf list-keys \
+            sigul -c /var/sigul/config/client.conf list-keys \
             --password "$EPHEMERAL_TEST_PASSWORD" 2>/dev/null >/dev/null; then
             verbose "Sigul connection works, RPM signing failed due to invalid RPM format"
             test_passed "$test_name"
@@ -598,7 +599,7 @@ test_key_management() {
     network_name=$(get_sigul_network_name)
 
     if run_sigul_client_cmd \
-        sigul -c /etc/sigul/client.conf list-users \
+        sigul -c /var/sigul/config/client.conf list-users \
         --password "$EPHEMERAL_TEST_PASSWORD" 2>/dev/null; then
 
         verbose "List users command succeeded"
@@ -609,7 +610,7 @@ test_key_management() {
     # Get public key to verify key management functionality
     verbose "Retrieving public key for test-signing-key..."
     if run_sigul_client_cmd \
-        sigul -c /etc/sigul/client.conf get-public-key \
+        sigul -c /var/sigul/config/client.conf get-public-key \
         --password "$EPHEMERAL_TEST_PASSWORD" \
         test-signing-key > public-key.asc 2>/dev/null; then
 
@@ -651,7 +652,7 @@ test_batch_operations() {
     for i in {1..3}; do
         verbose "Signing batch-test-${i}.txt..."
         if run_sigul_client_cmd \
-            sigul -c /etc/sigul/client.conf sign-data \
+            sigul -c /var/sigul/config/client.conf sign-data \
             --password "$EPHEMERAL_TEST_PASSWORD" \
             test-signing-key "test-workspace/batch-test-${i}.txt" 2>/dev/null; then
 

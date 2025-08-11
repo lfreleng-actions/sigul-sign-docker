@@ -51,6 +51,9 @@ RUN chmod +x /tmp/install-sigul.sh && \
 COPY scripts/sigul-init.sh /usr/local/bin/sigul-init.sh
 RUN chmod +x /usr/local/bin/sigul-init.sh
 
+# Copy shared PKI files for certificate generation (permissions set later after user creation)
+COPY pki/ /workspace/pki/
+
 # Create sigul user and directories with consistent UID 1000 and GID 1000
 # Handle both RPM-created users (x86_64) and manual creation (ARM64)
 RUN if getent passwd sigul >/dev/null; then \
@@ -68,7 +71,12 @@ RUN if getent passwd sigul >/dev/null; then \
     # Create unified sigul directory structure under /var/sigul
     mkdir -p /var/sigul && \
     chown sigul:sigul /var/sigul && \
-    chmod 755 /var/sigul
+    chmod 755 /var/sigul && \
+    # Set proper permissions on PKI files after user creation
+    chmod 644 /workspace/pki/*.crt /workspace/pki/*.conf && \
+    chmod 644 /workspace/pki/*-key.pem && \
+    chmod +x /workspace/pki/*.sh && \
+    chown -R sigul:sigul /workspace/pki/
 
 # Set working directory
 WORKDIR /var/sigul

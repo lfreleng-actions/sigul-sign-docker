@@ -658,42 +658,21 @@ setup_certificates() {
     local import_list="$NSS_DIR/$SIGUL_ROLE/import_list.txt"
     true > "$import_list"
 
-    # Generate test certificates for this role
-    log "Generating test certificates for role: $SIGUL_ROLE"
+    # Copy shared CA certificate from repository
+    copy_shared_ca
+
+    # Generate component-specific certificate signed by shared CA
+    log "Generating certificate for role: $SIGUL_ROLE using shared CA"
 
     local generated_certs=()
-    case "$SIGUL_ROLE" in
-        server)
-            local server_cert
-            server_cert=$(generate_test_certificate "server")
-            log "Generated test certificate: $server_cert"
-            generated_certs+=("$server_cert")
-            local ca_cert
-            ca_cert=$(generate_test_certificate "ca")
-            log "Generated test certificate: $ca_cert"
-            generated_certs+=("$ca_cert")
-            ;;
-        bridge)
-            local bridge_cert
-            bridge_cert=$(generate_test_certificate "bridge")
-            log "Generated test certificate: $bridge_cert"
-            generated_certs+=("$bridge_cert")
-            local ca_cert
-            ca_cert=$(generate_test_certificate "ca")
-            log "Generated test certificate: $ca_cert"
-            generated_certs+=("$ca_cert")
-            ;;
-        client)
-            local client_cert
-            client_cert=$(generate_test_certificate "client")
-            log "Generated test certificate: $client_cert"
-            generated_certs+=("$client_cert")
-            local ca_cert
-            ca_cert=$(generate_test_certificate "ca")
-            log "Generated test certificate: $ca_cert"
-            generated_certs+=("$ca_cert")
-            ;;
-    esac
+    local component_cert
+    component_cert=$(generate_component_certificate "$SIGUL_ROLE")
+    log "Generated component certificate: $component_cert"
+    generated_certs+=("$component_cert")
+
+    # Add shared CA certificate to import list
+    local ca_cert="$SECRETS_DIR/certificates/ca.crt"
+    generated_certs+=("$ca_cert")
 
     # Import certificates for NSS
     for cert_file in "${generated_certs[@]}"; do
@@ -704,6 +683,83 @@ setup_certificates() {
 
     log "Certificate management setup completed"
     log "Generated and prepared ${#generated_certs[@]} certificate(s) for NSS import"
+}
+
+# Function to copy shared CA certificate from repository
+copy_shared_ca() {
+    local shared_ca_cert="/workspace/pki/ca.crt"
+    local shared_ca_key="/workspace/pki/ca-key.pem"
+    local local_ca_cert="$SECRETS_DIR/certificates/ca.crt"
+    local local_ca_key="$SECRETS_DIR/certificates/ca-key.pem"
+
+    log "Copying shared CA certificate from repository"
+
+    # Create certificates directory if it doesn't exist
+    mkdir -p "$SECRETS_DIR/certificates"
+
+    # Copy CA certificate and key from repository
+    if [[ -f "$shared_ca_cert" ]]; then
+        cp "$shared_ca_cert" "$local_ca_cert"
+        chmod 644 "$local_ca_cert"
+        log "Copied shared CA certificate"
+    else
+        error "Shared CA certificate not found: $shared_ca_cert"
+    fi
+
+    if [[ -f "$shared_ca_key" ]]; then
+        cp "$shared_ca_key" "$local_ca_key"
+        chmod 600 "$local_ca_key"
+        log "Copied shared CA private key"
+    else
+        error "Shared CA private key not found: $shared_ca_key"
+    fi
+}
+
+# Function to generate component certificate signed by shared CA
+generate_component_certificate() {
+    local component="$1"
+    local cert_file="$SECRETS_DIR/certificates/${component}.crt"
+    local key_file="$SECRETS_DIR/certificates/${component}-key.pem"
+    local csr_file="$SECRETS_DIR/certificates/${component}.csr"
+    local ca_cert="$SECRETS_DIR/certificates/ca.crt"
+    local ca_key="$SECRETS_DIR/certificates/ca-key.pem"
+    local ca_config="/workspace/pki/ca.conf"
+
+    log "Generating certificate for component: $component"
+
+    # Create certificates directory if it doesn't exist
+    mkdir -p "$(dirname "$cert_file")"
+
+    # Generate private key for component
+    openssl genrsa -out "$key_file" 2048 >/dev/null 2>&1
+    chmod 600 "$key_file"
+
+    # Create certificate signing request
+    local subject="/C=US/ST=California/L=San Francisco/O=Linux Foundation/OU=Sigul Infrastructure/CN=sigul-${component}"
+    openssl req -new -key "$key_file" -out "$csr_file" -subj "$subject" >/dev/null 2>&1
+
+    # Sign certificate with shared CA
+    if [[ -f "$ca_config" ]]; then
+        openssl x509 -req -in "$csr_file" \
+            -CA "$ca_cert" -CAkey "$ca_key" -CAcreateserial \
+            -out "$cert_file" -days 365 \
+            -extensions "${component}_extensions" \
+            -extfile "$ca_config" >/dev/null 2>&1
+    else
+        # Fallback without extensions if config not available
+        openssl x509 -req -in "$csr_file" \
+            -CA "$ca_cert" -CAkey "$ca_key" -CAcreateserial \
+            -out "$cert_file" -days 365 >/dev/null 2>&1
+    fi
+
+    # Clean up CSR
+    rm -f "$csr_file"
+
+    # Set proper permissions
+    chmod 644 "$cert_file"
+
+    log "Generated certificate: $cert_file"
+    echo "$cert_file"
 }
 
 #######################################
@@ -818,40 +874,46 @@ import_nss_certificates() {
                     ;;
             esac
 
-            log "Importing certificate: $cert_name as nickname: $cert_nickname"
-            if echo "$nss_password" | certutil -A -d "$nss_dir" -n "$cert_nickname" -t "CT,C,C" -i "$cert_file" -f /dev/stdin; then
+            # Check if certificate already exists
+            if echo "$nss_password" | certutil -L -d "$nss_dir" -n "$cert_nickname" -f /dev/stdin >/dev/null 2>&1; then
+                debug "Certificate already exists: $cert_name as $cert_nickname, skipping import"
                 ((imported_count++))
-                debug "Successfully imported: $cert_name as $cert_nickname"
-
-                # Also import private key if it exists
-                local key_file="${cert_file%.*}-key.pem"
-                if [[ -f "$key_file" ]]; then
-                    log "Importing private key for certificate: $cert_name"
-                    # Create temporary PKCS#12 file to import both cert and key
-                    local temp_p12=""
-                    temp_p12=$(mktemp -t cert.XXXXXXXX.p12)
-                    trap 'rm -f "$temp_p12" 2>/dev/null || true' EXIT
-
-                    # Convert cert + key to PKCS#12 format (password protected)
-                    if openssl pkcs12 -export -in "$cert_file" -inkey "$key_file" \
-                        -out "$temp_p12" -name "$cert_nickname" \
-                        -passout pass:"$nss_password" >/dev/null 2>&1; then
-
-                        # Import PKCS#12 into NSS (this updates the existing cert with private key)
-                        if echo "$nss_password" | pk12util -i "$temp_p12" -d "$nss_dir" -W "$nss_password" -K "$nss_password" 2>/dev/null; then
-                            debug "Successfully imported private key for: $cert_name"
-                        else
-                            log "Warning: Failed to import private key for: $cert_name (certificate import succeeded)"
-                        fi
-                    else
-                        log "Warning: Failed to create PKCS#12 file for: $cert_name"
-                    fi
-
-                    rm -f "$temp_p12" 2>/dev/null || true
-                    trap - EXIT
-                fi
             else
-                error "Failed to import certificate: $cert_name as $cert_nickname"
+                log "Importing certificate: $cert_name as nickname: $cert_nickname"
+                if echo "$nss_password" | certutil -A -d "$nss_dir" -n "$cert_nickname" -t "CT,C,C" -i "$cert_file" -f /dev/stdin; then
+                    ((imported_count++))
+                    debug "Successfully imported: $cert_name as $cert_nickname"
+                else
+                    error "Failed to import certificate: $cert_name as $cert_nickname"
+                fi
+            fi
+
+            # Also import private key if it exists
+            local key_file="${cert_file%.*}-key.pem"
+            if [[ -f "$key_file" ]]; then
+                log "Importing private key for certificate: $cert_name"
+                # Create temporary PKCS#12 file to import both cert and key
+                local temp_p12=""
+                temp_p12=$(mktemp -t cert.XXXXXXXX.p12)
+                trap 'rm -f "$temp_p12" 2>/dev/null || true' EXIT
+
+                # Convert cert + key to PKCS#12 format (password protected)
+                if openssl pkcs12 -export -in "$cert_file" -inkey "$key_file" \
+                    -out "$temp_p12" -name "$cert_nickname" \
+                    -passout pass:"$nss_password" >/dev/null 2>&1; then
+
+                    # Import PKCS#12 into NSS (this updates the existing cert with private key)
+                    if echo "$nss_password" | pk12util -i "$temp_p12" -d "$nss_dir" -W "$nss_password" -K "$nss_password" 2>/dev/null; then
+                        debug "Successfully imported private key for: $cert_name"
+                    else
+                        log "Warning: Failed to import private key for: $cert_name (certificate import succeeded)"
+                    fi
+                else
+                    log "Warning: Failed to create PKCS#12 file for: $cert_name"
+                fi
+
+                rm -f "$temp_p12" 2>/dev/null || true
+                trap - EXIT
             fi
         fi
     done < "$import_list"
@@ -1163,15 +1225,9 @@ validate_configuration() {
     debug "Validating configuration for role: $role"
     debug "Configuration file: $config_file"
 
-    # Check if configuration file exists (check primary location and fallback)
+    # Check if configuration file exists
     if [[ ! -f "$config_file" ]]; then
-        # Check fallback location for mounted configs
-        local fallback_config="/etc/sigul/${role}.conf"
-        if [[ ! -f "$fallback_config" ]]; then
-            error "Configuration file not found: $config_file or $fallback_config"
-        fi
-        config_file="$fallback_config"
-        debug "Using fallback configuration: $config_file"
+        error "Configuration file not found: $config_file"
     fi
 
     # Check file is readable
@@ -1715,12 +1771,7 @@ start_server() {
     # Verify configuration exists
     local server_config="$CONFIG_DIR/server.conf"
     if [[ ! -f "$server_config" ]]; then
-        # Check fallback location for mounted configs
-        server_config="/etc/sigul/server.conf"
-        if [[ ! -f "$server_config" ]]; then
-            error "Server configuration not found in $CONFIG_DIR/server.conf or /etc/sigul/server.conf" "$EXIT_CONFIG_ERROR"
-        fi
-        debug "Using fallback server configuration: $server_config"
+        error "Server configuration not found: $server_config" "$EXIT_CONFIG_ERROR"
     fi
 
     # Create PID file path
@@ -1760,15 +1811,10 @@ start_bridge() {
         error "sigul_bridge binary not found in PATH" "$EXIT_DEPENDENCY_MISSING"
     fi
 
-    # Verify configuration exists (check primary location and fallback)
+    # Verify configuration exists
     local bridge_config="$CONFIG_DIR/bridge.conf"
     if [[ ! -f "$bridge_config" ]]; then
-        # Check fallback location for mounted configs
-        bridge_config="/etc/sigul/bridge.conf"
-        if [[ ! -f "$bridge_config" ]]; then
-            error "Bridge configuration not found in $CONFIG_DIR/bridge.conf or /etc/sigul/bridge.conf" "$EXIT_CONFIG_ERROR"
-        fi
-        debug "Using fallback bridge configuration: $bridge_config"
+        error "Bridge configuration not found: $bridge_config" "$EXIT_CONFIG_ERROR"
     fi
 
     # Create PID file path
@@ -1810,12 +1856,7 @@ start_client() {
 
     local client_config="$CONFIG_DIR/client.conf"
     if [[ ! -f "$client_config" ]]; then
-        # Check fallback location for mounted configs
-        client_config="/etc/sigul/client.conf"
-        if [[ ! -f "$client_config" ]]; then
-            error "Client configuration not found in $CONFIG_DIR/client.conf or /etc/sigul/client.conf" "$EXIT_CONFIG_ERROR"
-        fi
-        debug "Using fallback client configuration: $client_config"
+        error "Client configuration not found: $client_config" "$EXIT_CONFIG_ERROR"
     fi
 
     log "Client setup completed successfully"
