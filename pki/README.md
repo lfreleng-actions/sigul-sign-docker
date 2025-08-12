@@ -1,3 +1,8 @@
+<!--
+SPDX-License-Identifier: Apache-2.0
+SPDX-FileCopyrightText: 2025 The Linux Foundation
+-->
+
 # Sigul Test PKI Infrastructure
 
 This directory contains the PKI infrastructure for Sigul integration testing.
@@ -25,7 +30,8 @@ This directory contains the PKI infrastructure for Sigul integration testing.
 
 ## Client PKI
 
-The client PKI is packaged separately in `pki/client-pki-encrypted.asc` and contains:
+The system packages client PKI separately in `pki/client-pki-encrypted.asc`
+and includes:
 
 - Client certificate and private key
 - CA certificate for verification
@@ -34,11 +40,14 @@ The client PKI is packaged separately in `pki/client-pki-encrypted.asc` and cont
 
 ## Usage in Docker Compose
 
-This script generates certificates for containerized deployments where certificates are managed via sigul-init.sh.
+This script generates certificates for containerized deployments where
+sigul-init.sh handles certificates.
 
 ## Usage in Workflows
 
-The client PKI is generated dynamically during workflow execution using the `./scripts/generate-test-pki.sh` script. The workflows will capture the generated encrypted PKI content and pass it via environment variables.
+The system generates client PKI dynamically during workflow execution using the
+`./scripts/generate-test-pki.sh` script. This process captures the generated
+encrypted PKI content and passes it via environment variables.
 
 Example workflow usage:
 
@@ -55,4 +64,4 @@ Example workflow usage:
 
 ## Security Note
 
-This PKI infrastructure is for testing purposes only. Do not use in production.
+This PKI infrastructure serves testing purposes. Do not use in production.
