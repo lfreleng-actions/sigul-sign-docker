@@ -47,7 +47,7 @@ services:
     restart: unless-stopped
     init: true
     # Initialize server using unified approach with debug logging
-    command: ["/usr/local/bin/sigul-init.sh", "--role", "server", "--debug"]
+    command: ["/usr/local/bin/sigul-init.sh", "--role", "server", "--debug", "--start-service"]
 
   # Sigul Bridge Container
   sigul-bridge:
@@ -83,7 +83,7 @@ services:
     security_opt:
       - no-new-privileges:true
     # Initialize bridge using unified approach with debug logging
-    command: ["/usr/local/bin/sigul-init.sh", "--role", "bridge", "--debug"]
+    command: ["/usr/local/bin/sigul-init.sh", "--role", "bridge", "--debug", "--start-service"]
 
   # Sigul Client Test Environment
   sigul-client-test:

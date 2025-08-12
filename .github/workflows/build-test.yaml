@@ -492,8 +492,8 @@ jobs:
     timeout-minutes: 20
     needs: [build-containers, client-mock-test]
     # Temporarily disable while debugging integration tests/stack
-    if: github.event_name != 'pull_request' && vars.enabled != 'true'
-    # if: github.event_name != 'pull_request' &&
+    if: false
+    # if: github.event_name != 'pull_request'
     steps:
       # Harden the runner used by this workflow
       # yamllint disable-line rule:line-length

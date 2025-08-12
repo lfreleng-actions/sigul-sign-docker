@@ -815,7 +815,19 @@ verify_infrastructure() {
 
     # Check server process health separately since it doesn't listen on a port
     log "Testing Sigul Server (process health check)..."
-    if docker exec sigul-server pgrep -f server >/dev/null 2>&1; then
+
+    # First check if the server container is running
+    local server_container_status
+    server_container_status=$(docker inspect --format='{{.State.Status}}' sigul-server 2>/dev/null || echo "unknown")
+
+    if [[ "$server_container_status" != "running" ]]; then
+        error "❌ Sigul Server container is not running (status: $server_container_status)"
+        if [[ "$server_container_status" == "restarting" ]]; then
+            error "Server container is in restart loop - check container logs for initialization errors"
+            debug "Server container logs (last 20 lines):"
+            docker logs --tail 20 sigul-server 2>/dev/null || true
+        fi
+    elif docker exec sigul-server pgrep -f server >/dev/null 2>&1; then
         success "✅ Sigul Server process is running"
         ((healthy_services++))
         ((total_services++))
@@ -844,6 +856,20 @@ verify_infrastructure() {
         while [[ $attempt -le $max_retries ]]; do
             debug "Bridge readiness check attempt $attempt/$max_retries..."
 
+            # First check if the container is running before trying to exec into it
+            local container_status
+            container_status=$(docker inspect --format='{{.State.Status}}' sigul-bridge 2>/dev/null || echo "unknown")
+
+            if [[ "$container_status" != "running" ]]; then
+                debug "Bridge container is not running (status: $container_status), waiting ${retry_interval} seconds..."
+                if [[ $attempt -lt $max_retries ]]; then
+                    sleep $retry_interval
+                fi
+                ((attempt++))
+                continue
+            fi
+
+            # Container is running, now check if it's listening on the port
             if docker exec sigul-bridge ss -tlun | grep -q ":44334" 2>/dev/null; then
                 bridge_ready=true
                 success "✅ Bridge is listening and ready for connections (attempt $attempt)"
@@ -860,6 +886,18 @@ verify_infrastructure() {
         if [[ "$bridge_ready" != "true" ]]; then
             error "❌ Bridge is not listening on port 44334 after $max_retries attempts"
             error "Total wait time: $((10 + (max_retries - 1) * retry_interval)) seconds"
+
+            # Provide additional debugging information
+            local final_container_status
+            final_container_status=$(docker inspect --format='{{.State.Status}}' sigul-bridge 2>/dev/null || echo "unknown")
+            error "Final bridge container status: $final_container_status"
+
+            if [[ "$final_container_status" == "restarting" ]]; then
+                error "Container is in restart loop - check container logs for initialization errors"
+                debug "Bridge container logs (last 20 lines):"
+                docker logs --tail 20 sigul-bridge 2>/dev/null || true
+            fi
+
             return 1
         fi
 
