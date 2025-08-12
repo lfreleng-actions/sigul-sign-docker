@@ -1857,17 +1857,68 @@ start_bridge() {
     # Ensure log directory exists
     mkdir -p "$LOGS_DIR/bridge"
     : > "$wrapper_log"
+    # Pre-flight diagnostics before launching bridge
+    debug "Collecting pre-flight diagnostics for bridge startup..."
+    {
+        echo "=== Bridge Pre-flight Diagnostics ($(date)) ==="
+        echo "Config file checksum:"
+        if command -v sha256sum >/dev/null 2>&1; then sha256sum "$bridge_config" || true; fi
+        echo
+        echo "File permissions:"
+        for f in "$bridge_config" \
+                 "$SIGUL_BASE_DIR/secrets/certificates/ca.crt" \
+                 "$SIGUL_BASE_DIR/secrets/certificates/bridge.crt" \
+                 "$SIGUL_BASE_DIR/secrets/certificates/bridge-key.pem"; do
+            [ -e "$f" ] && ls -l "$f" || echo "MISSING: $f"
+        done
+        echo
+        echo "NSS directory listing:"
+        ls -l "$SIGUL_BASE_DIR/nss/bridge" 2>/dev/null || echo "Cannot list NSS dir"
+        echo
+        echo "Environment (filtered):"
+        env | grep -E '^SIGUL_|^NSS_|^DEBUG=' || true
+        echo "==============================="
+    } >> "$wrapper_log" 2>&1
+
+    start_time=$(date +%s)
     set +e
     # Run bridge in foreground, capture output, and pass explicit internal dirs
     sigul_bridge -c "$bridge_config" -v --internal-log-dir "$LOGS_DIR/bridge" --internal-pid-dir "$PIDS_DIR" 2>&1 | tee -a "$wrapper_log"
     bridge_rc=${PIPESTATUS[0]}
     set -e
     if [[ $bridge_rc -ne 0 ]]; then
+        end_time=$(date +%s)
+        runtime=$(( end_time - start_time ))
         {
             echo "Bridge daemon exited with code $bridge_rc at $(date)"
+            echo "Runtime (seconds): $runtime"
             echo "--- Last 80 lines of captured output ---"
-            tail -80 "$wrapper_log" || true
+            tail -80 "$wrapper_log" 2>/dev/null || echo "No wrapper log content"
+            echo
+            echo "--- Additional diagnostics after failure ---"
+            echo "Listing /var/sigul/logs/bridge:"
+            ls -l "$LOGS_DIR/bridge" || true
+            echo
+            echo "Attempting secondary strace (short) if available..."
         } > "$startup_err_file"
+
+        if command -v strace >/dev/null 2>&1; then
+            # Run a quick strace attempt to capture early syscalls (not replacing original log)
+            strace -tt -f -o "$LOGS_DIR/bridge/strace.bridge.txt" \
+                sigul_bridge -c "$bridge_config" -v --internal-log-dir "$LOGS_DIR/bridge" --internal-pid-dir "$PIDS_DIR" >/dev/null 2>&1 || true
+            {
+                echo "--- Tail of strace.bridge.txt (last 60 lines) ---"
+                tail -60 "$LOGS_DIR/bridge/strace.bridge.txt" 2>/dev/null || echo "No strace output"
+            } >> "$startup_err_file"
+        else
+            echo "strace not installed; skipping syscall trace" >> "$startup_err_file"
+        fi
+
+        # If wrapper log ended up empty, note that explicitly
+        if [[ ! -s "$wrapper_log" ]]; then
+            echo "NOTE: Wrapper stdout log is empty (process may have aborted before emitting output)" >> "$startup_err_file"
+        fi
+
         # Allow inspection time in debug mode to avoid rapid restart loops
         if [[ "${DEBUG:-false}" == "true" ]]; then
             echo "DEBUG mode: sleeping 600s for inspection" >> "$startup_err_file"
