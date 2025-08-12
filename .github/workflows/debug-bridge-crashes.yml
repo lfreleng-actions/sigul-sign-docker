@@ -126,8 +126,8 @@ jobs:
           docker ps -a --filter "name=sigul"
 
           # Check for immediate failures
-          SERVER_STATUS=$(docker inspect --format='{{.State.Status}}' sigul-server 2>/dev/null || echo "not_found")
-          BRIDGE_STATUS=$(docker inspect --format='{{.State.Status}}' sigul-bridge 2>/dev/null || echo "not_found")
+          SERVER_STATUS=$(timeout 10 docker inspect --format='{{.State.Status}}' sigul-server 2>/dev/null || echo "not_found")
+          BRIDGE_STATUS=$(timeout 10 docker inspect --format='{{.State.Status}}' sigul-bridge 2>/dev/null || echo "not_found")
 
           echo "Server status: $SERVER_STATUS"
           echo "Bridge status: $BRIDGE_STATUS"
@@ -135,9 +135,9 @@ jobs:
           if [[ "$SERVER_STATUS" != "running" ]] || [[ "$BRIDGE_STATUS" != "running" ]]; then
             echo "❌ Containers failed to start properly"
             echo "Server logs:"
-            docker logs sigul-server --tail 50 || true
+            timeout 30 docker logs sigul-server --tail 50 || true
             echo "Bridge logs:"
-            docker logs sigul-bridge --tail 50 || true
+            timeout 30 docker logs sigul-bridge --tail 50 || true
             exit 1
           fi
 
@@ -183,8 +183,8 @@ jobs:
           docker ps -a --filter "name=sigul" || true
 
           # Check for restart counts
-          SERVER_RESTARTS=$(docker inspect --format='{{.RestartCount}}' sigul-server 2>/dev/null || echo "unknown")
-          BRIDGE_RESTARTS=$(docker inspect --format='{{.RestartCount}}' sigul-bridge 2>/dev/null || echo "unknown")
+          SERVER_RESTARTS=$(timeout 10 docker inspect --format='{{.RestartCount}}' sigul-server 2>/dev/null || echo "unknown")
+          BRIDGE_RESTARTS=$(timeout 10 docker inspect --format='{{.RestartCount}}' sigul-bridge 2>/dev/null || echo "unknown")
 
           echo "Final restart counts:"
           echo "Server: $SERVER_RESTARTS"
@@ -211,17 +211,17 @@ jobs:
 
           # Capture final logs from all containers
           for container in sigul-server sigul-bridge; do
-            if docker ps -a --filter "name=$container" | grep -q "$container"; then
+            if timeout 10 docker ps -a --filter "name=$container" | grep -q "$container"; then
               echo "Capturing final logs for $container..."
-              docker logs "$container" > "crash-diagnostics/final-logs/${container}_final.log" 2>&1 || true
+              timeout 60 docker logs "$container" > "crash-diagnostics/final-logs/${container}_final.log" 2>&1 || echo "Failed to capture logs for $container" > "crash-diagnostics/final-logs/${container}_final.log"
 
               # Also capture container inspect
-              docker inspect "$container" > "crash-diagnostics/final-logs/${container}_final_inspect.json" 2>/dev/null || true
+              timeout 15 docker inspect "$container" > "crash-diagnostics/final-logs/${container}_final_inspect.json" 2>/dev/null || echo "Failed to inspect $container" > "crash-diagnostics/final-logs/${container}_final_inspect.json"
             fi
           done
 
           # Capture Docker events
-          docker events --since "1h" --filter "container=sigul-server" --filter "container=sigul-bridge" > "crash-diagnostics/final-logs/docker_events.log" 2>/dev/null || true
+          timeout 30 docker events --since "1h" --until "now" --filter "container=sigul-server" --filter "container=sigul-bridge" > "crash-diagnostics/final-logs/docker_events.log" 2>/dev/null || echo "Failed to capture Docker events" > "crash-diagnostics/final-logs/docker_events.log"
 
           # Capture system information
           {
@@ -236,7 +236,7 @@ jobs:
             docker system df
             echo ""
             echo "=== FINAL CONTAINER STATUS ==="
-            docker ps -a --filter "name=sigul"
+            timeout 15 docker ps -a --filter "name=sigul"
           } > "crash-diagnostics/final-logs/system_state.log"
 
           echo "::endgroup::"
@@ -411,7 +411,7 @@ jobs:
 
           # Check initial status
           echo "Initial container status:"
-          docker ps -a --filter "name=sigul"
+          timeout 15 docker ps -a --filter "name=sigul"
 
           # Check for immediate failures
           SERVER_STATUS=$(docker inspect --format='{{.State.Status}}' sigul-server 2>/dev/null || echo "not_found")
@@ -499,17 +499,17 @@ jobs:
 
           # Capture final logs from all containers
           for container in sigul-server sigul-bridge; do
-            if docker ps -a --filter "name=$container" | grep -q "$container"; then
+            if timeout 10 docker ps -a --filter "name=$container" | grep -q "$container"; then
               echo "Capturing final logs for $container..."
-              docker logs "$container" > "crash-diagnostics/final-logs/${container}_final.log" 2>&1 || true
+              timeout 60 docker logs "$container" > "crash-diagnostics/final-logs/${container}_final.log" 2>&1 || echo "Failed to capture logs for $container" > "crash-diagnostics/final-logs/${container}_final.log"
 
               # Also capture container inspect
-              docker inspect "$container" > "crash-diagnostics/final-logs/${container}_final_inspect.json" 2>/dev/null || true
+              timeout 15 docker inspect "$container" > "crash-diagnostics/final-logs/${container}_final_inspect.json" 2>/dev/null || echo "Failed to inspect $container" > "crash-diagnostics/final-logs/${container}_final_inspect.json"
             fi
           done
 
           # Capture Docker events
-          docker events --since "1h" --filter "container=sigul-server" --filter "container=sigul-bridge" > "crash-diagnostics/final-logs/docker_events.log" 2>/dev/null || true
+          timeout 30 docker events --since "1h" --until "now" --filter "container=sigul-server" --filter "container=sigul-bridge" > "crash-diagnostics/final-logs/docker_events.log" 2>/dev/null || echo "Failed to capture Docker events" > "crash-diagnostics/final-logs/docker_events.log"
 
           # Capture system information
           {

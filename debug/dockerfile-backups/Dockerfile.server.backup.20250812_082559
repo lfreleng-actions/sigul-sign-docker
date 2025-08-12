@@ -84,11 +84,6 @@ RUN if getent passwd sigul >/dev/null; then \
 WORKDIR /var/sigul
 
 # Switch to sigul user
-# Fix log and PID file permissions - create directories with proper ownership
-RUN mkdir -p /var/log /var/run && \
-    chown sigul:sigul /var/log /var/run && \
-    chmod 755 /var/log /var/run
-
 USER sigul
 
 # Default command - initialize and start service

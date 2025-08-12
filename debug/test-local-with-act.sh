@@ -87,7 +87,7 @@ OPTIONS:
 DESCRIPTION:
     This script uses nektos/act to run GitHub Actions workflows locally,
     allowing you to test changes before pushing to CI. It provides:
-    
+
     1. **Dockerfile Syntax Checking**: Validates all Dockerfiles
     2. **Local Container Testing**: Builds and runs containers locally
     3. **Stability Testing**: Monitors for restart issues
@@ -96,16 +96,16 @@ DESCRIPTION:
 EXAMPLES:
     # Run basic test
     $0
-    
+
     # Test ARM64 architecture
     $0 --architecture arm64
-    
+
     # Run longer stability test
     $0 --duration 300
-    
+
     # Just check syntax without running containers
     $0 --dry-run
-    
+
     # Run with verbose output
     $0 --verbose
 
@@ -176,7 +176,7 @@ parse_arguments() {
 # Check prerequisites
 check_prerequisites() {
     section "Checking prerequisites"
-    
+
     # Check if act is installed
     if ! command -v act >/dev/null 2>&1; then
         error "nektos/act is not installed"
@@ -185,20 +185,20 @@ check_prerequisites() {
         log "On Linux: see installation instructions at the GitHub repo"
         exit 1
     fi
-    
+
     local act_version
     act_version=$(act --version 2>/dev/null | head -1 || echo "unknown")
     debug "Act version: $act_version"
-    
+
     # Check if Docker is running
     if ! docker info >/dev/null 2>&1; then
         error "Docker is not running"
         log "Please start Docker and try again"
         exit 1
     fi
-    
+
     debug "Docker is running"
-    
+
     # Check if we're in the right directory
     if [[ ! -f "$PROJECT_ROOT/docker-compose.sigul.yml" ]]; then
         error "Not in sigul-sign-docker project root"
@@ -206,7 +206,7 @@ check_prerequisites() {
         log "Expected file: $PROJECT_ROOT/docker-compose.sigul.yml"
         exit 1
     fi
-    
+
     # Check if workflow file exists
     local workflow_file="$PROJECT_ROOT/.github/workflows/${WORKFLOW}.yml"
     if [[ ! -f "$workflow_file" ]]; then
@@ -215,30 +215,30 @@ check_prerequisites() {
         find "$PROJECT_ROOT/.github/workflows" -name "*.yml" -exec basename {} \; 2>/dev/null || echo "No workflows found"
         exit 1
     fi
-    
+
     success "Prerequisites check passed"
 }
 
 # Check Dockerfile syntax locally
 check_dockerfile_syntax() {
     section "Checking Dockerfile syntax"
-    
+
     local dockerfiles=(
         "Dockerfile.server"
-        "Dockerfile.bridge" 
+        "Dockerfile.bridge"
         "Dockerfile.client"
     )
-    
+
     local syntax_errors=0
-    
+
     for dockerfile in "${dockerfiles[@]}"; do
         if [[ -f "$PROJECT_ROOT/$dockerfile" ]]; then
             log "Checking $dockerfile..."
-            
+
             # Simple syntax check by attempting to parse the Dockerfile
             local syntax_output
             syntax_output=$(docker build --file "$dockerfile" --target nonexistent-stage "$PROJECT_ROOT" 2>&1 || true)
-            
+
             # Check if it's a syntax error (not just missing target stage)
             if echo "$syntax_output" | grep -q "dockerfile parse error\|unknown instruction\|invalid reference format"; then
                 error "❌ $dockerfile has syntax errors:"
@@ -251,35 +251,35 @@ check_dockerfile_syntax() {
             warn "Dockerfile not found: $dockerfile"
         fi
     done
-    
+
     if [[ $syntax_errors -gt 0 ]]; then
         error "Found $syntax_errors Dockerfile(s) with syntax errors"
         exit 1
     fi
-    
+
     success "All Dockerfiles have valid syntax"
 }
 
 # Run workflow with act
 run_workflow_with_act() {
     section "Running workflow '$WORKFLOW' with act"
-    
+
     cd "$PROJECT_ROOT"
-    
+
     # Set up act parameters
     local act_args=(
         "--job" "local-debug-test"  # Specific job name
-        "--verbose" 
+        "--verbose"
         "--rm"  # Remove containers after run
     )
-    
+
     if [[ "${VERBOSE_MODE}" == "true" ]]; then
         act_args+=("--verbose")
     fi
-    
+
     # Set up input parameters for the workflow
     local workflow_inputs=()
-    
+
     if [[ "$WORKFLOW" == "local-debug-test" ]]; then
         workflow_inputs+=(
             "-s" "GITHUB_TOKEN=dummy"  # Some workflows expect this
@@ -287,16 +287,16 @@ run_workflow_with_act() {
             "--input" "architecture=$ARCHITECTURE"
         )
     fi
-    
+
     log "Running act with the following configuration:"
     log "  Workflow: $WORKFLOW"
-    log "  Architecture: $ARCHITECTURE" 
+    log "  Architecture: $ARCHITECTURE"
     log "  Duration: ${DURATION}s"
     log "  Verbose: $VERBOSE_MODE"
-    
+
     # Run act
     log "Executing: act workflow_dispatch ${act_args[*]} ${workflow_inputs[*]}"
-    
+
     if act workflow_dispatch "${act_args[@]}" "${workflow_inputs[@]}"; then
         success "✅ Workflow completed successfully"
         return 0
@@ -310,22 +310,22 @@ run_workflow_with_act() {
 # Quick local test without act
 run_quick_local_test() {
     section "Running quick local test (without act)"
-    
+
     cd "$PROJECT_ROOT"
-    
+
     log "Building images locally..."
-    
+
     # Build images
     local images=(
         "server:Dockerfile.server"
         "bridge:Dockerfile.bridge"
         "client:Dockerfile.client"
     )
-    
+
     for image_def in "${images[@]}"; do
         local image_name="${image_def%%:*}"
         local dockerfile="${image_def##*:}"
-        
+
         log "Building $image_name image..."
         if docker build \
             --file "$dockerfile" \
@@ -338,7 +338,7 @@ run_quick_local_test() {
             return 1
         fi
     done
-    
+
     # Set up environment
     export SIGUL_SERVER_IMAGE="server-linux-${ARCHITECTURE}-image:test"
     export SIGUL_BRIDGE_IMAGE="bridge-linux-${ARCHITECTURE}-image:test"
@@ -346,36 +346,36 @@ run_quick_local_test() {
     export NSS_PASSWORD="test_password_$(date +%s)"
     export SIGUL_ADMIN_PASSWORD="test_admin_$(date +%s)"
     export DEBUG="true"
-    
+
     log "Starting containers..."
     docker compose -f docker-compose.sigul.yml up -d sigul-server sigul-bridge
-    
+
     # Wait for startup
     sleep 15
-    
+
     # Check status
     local server_status
     server_status=$(docker inspect --format='{{.State.Status}}' sigul-server 2>/dev/null || echo "not_found")
     local bridge_status
     bridge_status=$(docker inspect --format='{{.State.Status}}' sigul-bridge 2>/dev/null || echo "not_found")
-    
+
     log "Container status:"
     log "  Server: $server_status"
     log "  Bridge: $bridge_status"
-    
+
     if [[ "$server_status" == "running" ]] && [[ "$bridge_status" == "running" ]]; then
         success "✅ Containers started successfully"
-        
+
         # Quick stability check
         log "Running ${DURATION}s stability check..."
         local end_time=$(($(date +%s) + DURATION))
-        
+
         while [[ $(date +%s) -lt $end_time ]]; do
             local current_server_status
             current_server_status=$(docker inspect --format='{{.State.Status}}' sigul-server 2>/dev/null || echo "not_found")
             local current_bridge_status
             current_bridge_status=$(docker inspect --format='{{.State.Status}}' sigul-bridge 2>/dev/null || echo "not_found")
-            
+
             if [[ "$current_server_status" != "running" ]] || [[ "$current_bridge_status" != "running" ]]; then
                 error "❌ Container(s) stopped running during test"
                 log "Server: $current_server_status"
@@ -383,16 +383,16 @@ run_quick_local_test() {
                 docker compose -f docker-compose.sigul.yml down --remove-orphans || true
                 return 1
             fi
-            
+
             sleep 10
         done
-        
+
         success "✅ Stability test passed"
-        
+
         # Cleanup
         log "Cleaning up..."
         docker compose -f docker-compose.sigul.yml down --remove-orphans || true
-        
+
         return 0
     else
         error "❌ Containers failed to start"
@@ -400,7 +400,7 @@ run_quick_local_test() {
         docker logs sigul-server --tail 20 || true
         log "Bridge logs:"
         docker logs sigul-bridge --tail 20 || true
-        
+
         # Cleanup
         docker compose -f docker-compose.sigul.yml down --remove-orphans || true
         return 1
@@ -410,7 +410,7 @@ run_quick_local_test() {
 # Main function
 main() {
     parse_arguments "$@"
-    
+
     section "=== Local Testing with Act ==="
     log "Testing Sigul infrastructure locally before CI"
     log "Workflow: $WORKFLOW"
@@ -418,19 +418,19 @@ main() {
     log "Duration: ${DURATION}s"
     log "Dry run: $DRY_RUN"
     log ""
-    
+
     check_prerequisites
     check_dockerfile_syntax
-    
+
     if [[ "${DRY_RUN}" == "true" ]]; then
         success "✅ Dry run completed - syntax checks passed"
         log "To run full test, remove --dry-run flag"
         exit 0
     fi
-    
+
     # Try to run with act first, fall back to local test if act fails
     local test_result=0
-    
+
     if command -v act >/dev/null 2>&1; then
         log "Using nektos/act to simulate GitHub Actions environment"
         if ! run_workflow_with_act; then
@@ -441,7 +441,7 @@ main() {
         log "Act not available, running quick local test"
         run_quick_local_test || test_result=1
     fi
-    
+
     section "=== Local Testing Complete ==="
     if [[ $test_result -eq 0 ]]; then
         success "✅ All local tests passed"
@@ -450,7 +450,7 @@ main() {
         error "❌ Local tests failed"
         log "Fix the issues before pushing to CI"
     fi
-    
+
     exit $test_result
 }
 

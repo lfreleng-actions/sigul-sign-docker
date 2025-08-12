@@ -1,12 +1,12 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: 2025 The Linux Foundation
 
-# Simplified Dockerfile for sigul server using dedicated build scripts
+# Simplified Dockerfile for sigul bridge using dedicated build scripts
 FROM registry.access.redhat.com/ubi9/ubi-minimal:latest
 
 LABEL maintainer="releng@linuxfoundation.org"
-LABEL org.opencontainers.image.title="Sigul Server"
-LABEL org.opencontainers.image.description="Simplified Linux Foundation signing infrastructure server"
+LABEL org.opencontainers.image.title="Sigul Bridge"
+LABEL org.opencontainers.image.description="Simplified Linux Foundation signing infrastructure bridge"
 LABEL org.opencontainers.image.source="https://github.com/lfreleng-actions/sigul-sign-docker"
 
 # Install package managers and required dependencies
@@ -44,7 +44,7 @@ RUN dnf install -y --setopt=install_weak_deps=False \
 # Copy and run installation script
 COPY build-scripts/install-sigul.sh /tmp/install-sigul.sh
 RUN chmod +x /tmp/install-sigul.sh && \
-    /tmp/install-sigul.sh --verify server && \
+    /tmp/install-sigul.sh --verify bridge && \
     rm /tmp/install-sigul.sh
 
 # Copy unified initialization script
@@ -84,16 +84,16 @@ RUN if getent passwd sigul >/dev/null; then \
 WORKDIR /var/sigul
 
 # Switch to sigul user
-# Fix log and PID file permissions - create directories with proper ownership
-RUN mkdir -p /var/log /var/run && \
-    chown sigul:sigul /var/log /var/run && \
-    chmod 755 /var/log /var/run
+# Fix log permissions - create /var/log with proper ownership
+RUN mkdir -p /var/log && \
+    chown sigul:sigul /var/log && \
+    chmod 755 /var/log
 
 USER sigul
 
 # Default command - initialize and start service
-CMD ["/usr/local/bin/sigul-init.sh", "--role", "server", "--start-service"]
+CMD ["/usr/local/bin/sigul-init.sh", "--role", "bridge", "--start-service"]
 
 # Health check - more robust process check with longer grace period
 HEALTHCHECK --interval=45s --timeout=15s --start-period=120s --retries=5 \
-    CMD pgrep -f "sigul_server" >/dev/null 2>&1 || exit 1
+    CMD pgrep -f "sigul_bridge" >/dev/null 2>&1 || exit 1

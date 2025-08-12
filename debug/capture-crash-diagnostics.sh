@@ -345,10 +345,10 @@ start_continuous_log_capture() {
 
     for container in "${containers[@]}"; do
         if docker ps --filter "name=$container" --filter "status=running" | grep -q "$container"; then
-            # Start continuous log capture in background
+            # Start continuous log capture in background with error handling
             {
                 echo "[$(date -Iseconds)] Starting continuous log capture for $container"
-                docker logs -f "$container" 2>&1
+                timeout 3600 docker logs -f "$container" 2>&1 || echo "[$(date -Iseconds)] Log capture terminated for $container"
             } > "$OUTPUT_DIR/logs/continuous/${container}_continuous.log" 2>&1 &
 
             local pid=$!
@@ -360,7 +360,11 @@ start_continuous_log_capture() {
     done
 
     # Save all log PIDs for cleanup
-    printf '%s\n' "${log_pids[@]}" > "$OUTPUT_DIR/logs/continuous/all_log_pids.txt"
+    if [[ ${#log_pids[@]} -gt 0 ]]; then
+        printf '%s\n' "${log_pids[@]}" > "$OUTPUT_DIR/logs/continuous/all_log_pids.txt"
+    else
+        echo "No log capture processes started" > "$OUTPUT_DIR/logs/continuous/all_log_pids.txt"
+    fi
 
     success "Continuous log capture started for all running containers"
 }
@@ -431,8 +435,10 @@ capture_container_snapshot() {
                 echo "}"
             } > "$snapshot_file"
 
-            # Also capture recent logs snapshot
-            docker logs --tail 50 "$container" > "$OUTPUT_DIR/logs/snapshots/${container}_logs_${snapshot_id}_${timestamp}.log" 2>&1 || true
+            # Capture recent logs snapshot with timeout
+            timeout 20 docker logs --tail 50 "$container" > "$OUTPUT_DIR/logs/snapshots/${container}_logs_${snapshot_id}_${timestamp}.log" 2>&1 || {
+                echo "WARNING: Failed to capture log snapshot for $container" > "$OUTPUT_DIR/logs/snapshots/${container}_logs_${snapshot_id}_${timestamp}.log"
+            }
 
             debug "Captured snapshot $snapshot_id for $container"
         fi
@@ -501,7 +507,7 @@ capture_crash_event() {
         echo ""
 
         echo "=== CONTAINER LOGS (last 200 lines) ==="
-        docker logs --tail 200 "$container" 2>&1 || echo "Container logs unavailable"
+        timeout 30 docker logs --tail 200 "$container" 2>&1 || echo "Container logs unavailable (timeout or error)"
         echo ""
 
         echo "=== SYSTEM STATE AT CRASH ==="
@@ -511,22 +517,22 @@ capture_crash_event() {
         echo ""
 
         echo "=== DOCKER EVENTS (last 50) ==="
-        docker events --since "10m" --filter "container=$container" 2>/dev/null | tail -50 || echo "Docker events unavailable"
+        timeout 15 docker events --since "10m" --until "now" --filter "container=$container" 2>/dev/null | tail -50 || echo "Docker events unavailable"
         echo ""
 
         echo "=== OTHER CONTAINERS STATUS ==="
-        docker ps -a --filter "name=sigul" 2>/dev/null || echo "Container status unavailable"
+        timeout 10 docker ps -a --filter "name=sigul" 2>/dev/null || echo "Container status unavailable"
         echo ""
 
     } > "$crash_dir/crash_report.log"
 
     # Try to capture core dumps or crash dumps if available
-    if docker exec "$container" test -d /var/sigul/logs 2>/dev/null; then
-        docker cp "$container:/var/sigul/logs" "$crash_dir/var_sigul_logs" 2>/dev/null || true
+    if timeout 10 docker exec "$container" test -d /var/sigul/logs 2>/dev/null; then
+        timeout 30 docker cp "$container:/var/sigul/logs" "$crash_dir/var_sigul_logs" 2>/dev/null || echo "Failed to copy logs directory"
     fi
 
     # Capture current configuration state
-    docker exec "$container" env > "$crash_dir/environment_at_crash.txt" 2>/dev/null || true
+    timeout 10 docker exec "$container" env > "$crash_dir/environment_at_crash.txt" 2>/dev/null || echo "Failed to capture environment variables"
 
     error "Crash event captured in: $crash_dir"
 }
@@ -588,7 +594,7 @@ stop_continuous_log_capture() {
 
     if [[ -f "$OUTPUT_DIR/logs/continuous/all_log_pids.txt" ]]; then
         while read -r pid; do
-            if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
+            if [[ -n "$pid" ]] && [[ "$pid" != "No log capture processes started" ]] && kill -0 "$pid" 2>/dev/null; then
                 kill "$pid" 2>/dev/null || true
                 debug "Stopped log capture process $pid"
             fi
