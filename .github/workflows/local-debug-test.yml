@@ -1,0 +1,294 @@
+---
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2025 The Linux Foundation
+
+name: Local Debug Test
+
+on:
+  workflow_dispatch:
+    inputs:
+      test_duration:
+        description: 'Test duration in seconds'
+        required: false
+        default: '120'
+        type: string
+      architecture:
+        description: 'Architecture to test'
+        required: false
+        default: 'amd64'
+        type: choice
+        options:
+          - amd64
+          - arm64
+
+env:
+  DEBUG: true
+
+jobs:
+  local-debug-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Check Dockerfile syntax
+        run: |
+          echo "::group::Checking Dockerfile syntax"
+          
+          # Check all Dockerfiles for syntax issues
+          for dockerfile in Dockerfile.*; do
+            echo "Checking $dockerfile..."
+            docker buildx build --file "$dockerfile" --dry-run . || {
+              echo "❌ Syntax error in $dockerfile"
+              exit 1
+            }
+          done
+          
+          echo "✅ All Dockerfiles have valid syntax"
+          echo "::endgroup::"
+
+      - name: Build Test Images
+        run: |
+          echo "::group::Building test images"
+          
+          ARCH="${{ github.event.inputs.architecture || 'amd64' }}"
+          echo "Building for architecture: $ARCH"
+          
+          # Build only the images we need for basic testing
+          echo "Building server image..."
+          docker build \
+            --file Dockerfile.server \
+            --tag "server-linux-${ARCH}-image:test" \
+            --build-arg TARGETARCH="$ARCH" \
+            --load \
+            .
+          
+          echo "Building bridge image..."
+          docker build \
+            --file Dockerfile.bridge \
+            --tag "bridge-linux-${ARCH}-image:test" \
+            --build-arg TARGETARCH="$ARCH" \
+            --load \
+            .
+          
+          echo "Building client image..."
+          docker build \
+            --file Dockerfile.client \
+            --tag "client-linux-${ARCH}-image:test" \
+            --build-arg TARGETARCH="$ARCH" \
+            --load \
+            .
+          
+          echo "✅ All images built successfully"
+          echo "::endgroup::"
+
+      - name: Test Container Startup
+        run: |
+          echo "::group::Testing container startup"
+          
+          ARCH="${{ github.event.inputs.architecture || 'amd64' }}"
+          
+          # Set environment variables
+          export SIGUL_SERVER_IMAGE="server-linux-${ARCH}-image:test"
+          export SIGUL_BRIDGE_IMAGE="bridge-linux-${ARCH}-image:test"
+          export SIGUL_CLIENT_IMAGE="client-linux-${ARCH}-image:test"
+          export NSS_PASSWORD="test_password_$(date +%s)"
+          export SIGUL_ADMIN_PASSWORD="test_admin_$(date +%s)"
+          
+          echo "Environment variables set:"
+          echo "SIGUL_SERVER_IMAGE=$SIGUL_SERVER_IMAGE"
+          echo "SIGUL_BRIDGE_IMAGE=$SIGUL_BRIDGE_IMAGE"
+          echo "SIGUL_CLIENT_IMAGE=$SIGUL_CLIENT_IMAGE"
+          
+          # Start infrastructure
+          echo "Starting Sigul infrastructure..."
+          docker compose -f docker-compose.sigul.yml up -d sigul-server sigul-bridge
+          
+          # Wait for startup
+          echo "Waiting for container startup..."
+          sleep 15
+          
+          # Check container status
+          echo "Container status:"
+          docker ps -a --filter "name=sigul"
+          
+          # Check if containers are running
+          SERVER_STATUS=$(docker inspect --format='{{.State.Status}}' sigul-server 2>/dev/null || echo "not_found")
+          BRIDGE_STATUS=$(docker inspect --format='{{.State.Status}}' sigul-bridge 2>/dev/null || echo "not_found")
+          
+          echo "Server status: $SERVER_STATUS"
+          echo "Bridge status: $BRIDGE_STATUS"
+          
+          if [[ "$SERVER_STATUS" != "running" ]]; then
+            echo "❌ Server failed to start"
+            echo "Server logs:"
+            docker logs sigul-server --tail 50 || true
+            exit 1
+          fi
+          
+          if [[ "$BRIDGE_STATUS" != "running" ]]; then
+            echo "❌ Bridge failed to start"
+            echo "Bridge logs:"
+            docker logs sigul-bridge --tail 50 || true
+            exit 1
+          fi
+          
+          echo "✅ Both containers started successfully"
+          echo "::endgroup::"
+
+      - name: Basic Connectivity Test
+        run: |
+          echo "::group::Testing basic connectivity"
+          
+          # Test if bridge port is accessible
+          echo "Testing bridge port 44334..."
+          if nc -z localhost 44334; then
+            echo "✅ Bridge port 44334 is accessible"
+          else
+            echo "❌ Bridge port 44334 is not accessible"
+            echo "Bridge logs:"
+            docker logs sigul-bridge --tail 20 || true
+            exit 1
+          fi
+          
+          # Check process status inside containers
+          echo "Checking server processes:"
+          docker exec sigul-server ps aux | grep -E "(sigul|python)" | grep -v grep || true
+          
+          echo "Checking bridge processes:"
+          docker exec sigul-bridge ps aux | grep -E "(sigul|python)" | grep -v grep || true
+          
+          echo "✅ Basic connectivity test passed"
+          echo "::endgroup::"
+
+      - name: Short Stability Test
+        run: |
+          echo "::group::Running short stability test"
+          
+          TEST_DURATION="${{ github.event.inputs.test_duration || '120' }}"
+          echo "Testing stability for $TEST_DURATION seconds..."
+          
+          # Monitor for restart loops
+          start_time=$(date +%s)
+          end_time=$((start_time + TEST_DURATION))
+          
+          initial_server_restarts=$(docker inspect --format='{{.RestartCount}}' sigul-server 2>/dev/null || echo "0")
+          initial_bridge_restarts=$(docker inspect --format='{{.RestartCount}}' sigul-bridge 2>/dev/null || echo "0")
+          
+          echo "Initial restart counts:"
+          echo "Server: $initial_server_restarts"
+          echo "Bridge: $initial_bridge_restarts"
+          
+          while [[ $(date +%s) -lt $end_time ]]; do
+            # Check current restart counts
+            current_server_restarts=$(docker inspect --format='{{.RestartCount}}' sigul-server 2>/dev/null || echo "0")
+            current_bridge_restarts=$(docker inspect --format='{{.RestartCount}}' sigul-bridge 2>/dev/null || echo "0")
+            
+            # Check for increases in restart count
+            if [[ $current_server_restarts -gt $initial_server_restarts ]]; then
+              echo "❌ Server restart detected! Count: $current_server_restarts"
+              echo "Server logs:"
+              docker logs sigul-server --tail 50 || true
+              exit 1
+            fi
+            
+            if [[ $current_bridge_restarts -gt $initial_bridge_restarts ]]; then
+              echo "❌ Bridge restart detected! Count: $current_bridge_restarts"
+              echo "Bridge logs:"
+              docker logs sigul-bridge --tail 50 || true
+              exit 1
+            fi
+            
+            # Check if containers are still running
+            SERVER_STATUS=$(docker inspect --format='{{.State.Status}}' sigul-server 2>/dev/null || echo "not_found")
+            BRIDGE_STATUS=$(docker inspect --format='{{.State.Status}}' sigul-bridge 2>/dev/null || echo "not_found")
+            
+            if [[ "$SERVER_STATUS" != "running" ]]; then
+              echo "❌ Server is no longer running: $SERVER_STATUS"
+              exit 1
+            fi
+            
+            if [[ "$BRIDGE_STATUS" != "running" ]]; then
+              echo "❌ Bridge is no longer running: $BRIDGE_STATUS"
+              exit 1
+            fi
+            
+            sleep 5
+          done
+          
+          final_server_restarts=$(docker inspect --format='{{.RestartCount}}' sigul-server 2>/dev/null || echo "0")
+          final_bridge_restarts=$(docker inspect --format='{{.RestartCount}}' sigul-bridge 2>/dev/null || echo "0")
+          
+          echo "Final restart counts:"
+          echo "Server: $final_server_restarts"
+          echo "Bridge: $final_bridge_restarts"
+          
+          echo "✅ Stability test passed - no restarts detected"
+          echo "::endgroup::"
+
+      - name: Capture Final State
+        if: always()
+        run: |
+          echo "::group::Capturing final state"
+          
+          # Create diagnostics directory
+          mkdir -p local-test-results
+          
+          # Capture container status
+          echo "Final container status:" | tee local-test-results/final_status.log
+          docker ps -a --filter "name=sigul" | tee -a local-test-results/final_status.log
+          
+          # Capture logs
+          echo "Capturing final logs..."
+          docker logs sigul-server > local-test-results/server_final.log 2>&1 || true
+          docker logs sigul-bridge > local-test-results/bridge_final.log 2>&1 || true
+          
+          # Capture container inspect
+          docker inspect sigul-server > local-test-results/server_inspect.json 2>/dev/null || true
+          docker inspect sigul-bridge > local-test-results/bridge_inspect.json 2>/dev/null || true
+          
+          # Capture system info
+          {
+            echo "=== SYSTEM INFO ==="
+            echo "Date: $(date)"
+            echo "Uptime: $(uptime)"
+            echo "Memory: $(free -h)"
+            echo "Disk: $(df -h .)"
+            echo ""
+            echo "=== DOCKER INFO ==="
+            docker system df
+            echo ""
+            echo "=== FINAL RESTART COUNTS ==="
+            echo "Server: $(docker inspect --format='{{.RestartCount}}' sigul-server 2>/dev/null || echo 'unknown')"
+            echo "Bridge: $(docker inspect --format='{{.RestartCount}}' sigul-bridge 2>/dev/null || echo 'unknown')"
+          } > local-test-results/system_info.log
+          
+          echo "Local test results saved to local-test-results/"
+          echo "::endgroup::"
+
+      - name: Cleanup
+        if: always()
+        run: |
+          echo "::group::Cleaning up"
+          
+          # Stop and remove containers
+          docker compose -f docker-compose.sigul.yml down --remove-orphans || true
+          
+          # Remove any leftover containers
+          docker rm -f sigul-server sigul-bridge sigul-client-test 2>/dev/null || true
+          
+          echo "Cleanup completed"
+          echo "::endgroup::"
+
+      - name: Upload Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: local-test-results
+          path: local-test-results/
+          retention-days: 3
