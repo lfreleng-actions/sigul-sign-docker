@@ -936,6 +936,19 @@ verify_infrastructure() {
                 debug "Bridge container restart count: $restart_count"
             fi
 
+            # Always attempt to extract logs from the persistent volume for deeper diagnostics,
+            # even if the container already restarted and lost its stdout/stderr context.
+            debug "Extracting bridge logs from persistent volume (if present)..."
+            docker run --rm -v sigul_bridge_data:/var/sigul alpine:3.19 sh -c '
+              set -e
+              for f in /var/sigul/logs/bridge/daemon.log /var/sigul/logs/bridge/daemon.stdout.log /var/sigul/logs/bridge/startup_errors.log; do
+                if [ -f "$f" ]; then
+                  echo "----- $f -----"
+                  tail -100 "$f" || true
+                fi
+              done
+            ' 2>/dev/null || true
+
             return 1
         fi
 

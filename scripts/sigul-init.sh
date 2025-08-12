@@ -1799,8 +1799,11 @@ start_server() {
     # Use exec to replace the current process (standard for Docker containers)
     # Run in foreground (no -d flag) for Docker containers
     # Try basic startup first without internal directory options
-    debug "Attempting basic sigul_server startup..."
-    exec sigul_server -c "$server_config" -v
+    debug "Attempting basic sigul_server startup with explicit internal dirs..."
+    # Explicitly pass internal log and pid directories (both required by daemon)
+    debug "  Using internal log dir: $LOGS_DIR/server"
+    debug "  Using internal pid dir: $PIDS_DIR"
+    exec sigul_server -c "$server_config" -v --internal-log-dir "$LOGS_DIR/server" --internal-pid-dir "$PIDS_DIR"
 }
 
 # Start sigul_bridge daemon
@@ -1845,8 +1848,37 @@ start_bridge() {
     # Use exec to replace the current process (standard for Docker containers)
     # Run in foreground (no -d flag) for Docker containers
     # Try basic startup first without internal directory options
-    debug "Attempting basic sigul_bridge startup..."
-    exec sigul_bridge -c "$bridge_config" -v
+    debug "Attempting basic sigul_bridge startup with explicit internal dirs and wrapper capture..."
+    # Wrapper to capture early-exit errors before container restarts
+    debug "  Using internal log dir: $LOGS_DIR/bridge"
+    debug "  Using internal pid dir: $PIDS_DIR"
+    wrapper_log="$LOGS_DIR/bridge/daemon.stdout.log"
+    startup_err_file="$LOGS_DIR/bridge/startup_errors.log"
+    # Ensure log directory exists
+    mkdir -p "$LOGS_DIR/bridge"
+    : > "$wrapper_log"
+    set +e
+    # Run bridge in foreground, capture output, and pass explicit internal dirs
+    sigul_bridge -c "$bridge_config" -v --internal-log-dir "$LOGS_DIR/bridge" --internal-pid-dir "$PIDS_DIR" 2>&1 | tee -a "$wrapper_log"
+    bridge_rc=${PIPESTATUS[0]}
+    set -e
+    if [[ $bridge_rc -ne 0 ]]; then
+        {
+            echo "Bridge daemon exited with code $bridge_rc at $(date)"
+            echo "--- Last 80 lines of captured output ---"
+            tail -80 "$wrapper_log" || true
+        } > "$startup_err_file"
+        # Allow inspection time in debug mode to avoid rapid restart loops
+        if [[ "${DEBUG:-false}" == "true" ]]; then
+            echo "DEBUG mode: sleeping 600s for inspection" >> "$startup_err_file"
+            sleep 600
+        else
+            # Short pause so external scripts can extract logs before restart
+            sleep 30
+        fi
+        exit "$bridge_rc"
+    fi
+    # Successful startup: the bridge process remains PID in the pipeline; when it exits, container exits.
 }
 
 # Start sigul client (if applicable)
