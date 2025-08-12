@@ -1791,15 +1791,16 @@ start_server() {
     # Start the server daemon
     log "Executing sigul_server daemon..."
 
+    # Simple pre-startup diagnostics
+    debug "Server config file: $server_config"
+    debug "Database directory: $DATABASE_DIR"
+    debug "NSS directory: $SIGUL_BASE_DIR/nss/server"
+
     # Use exec to replace the current process (standard for Docker containers)
     # Run in foreground (no -d flag) for Docker containers
-    # IMPORTANT: --internal-log-dir and --internal-pid-dir are REQUIRED even though not shown in --help
-    # These parameters direct sigul to use our custom directories instead of /var/log and /var/run
-    exec sigul_server \
-        -c "$server_config" \
-        --internal-log-dir "$LOGS_DIR/server" \
-        --internal-pid-dir "$PIDS_DIR" \
-        -v
+    # Try basic startup first without internal directory options
+    debug "Attempting basic sigul_server startup..."
+    exec sigul_server -c "$server_config" -v
 }
 
 # Start sigul_bridge daemon
@@ -1836,15 +1837,16 @@ start_bridge() {
     # Start the bridge daemon
     log "Executing sigul_bridge daemon..."
 
+    # Simple pre-startup diagnostics
+    debug "Bridge config file: $bridge_config"
+    debug "NSS directory: $SIGUL_BASE_DIR/nss/bridge"
+    debug "Certificate directory: $SIGUL_BASE_DIR/secrets/certificates"
+
     # Use exec to replace the current process (standard for Docker containers)
     # Run in foreground (no -d flag) for Docker containers
-    # IMPORTANT: --internal-log-dir and --internal-pid-dir are REQUIRED even though not shown in --help
-    # These parameters direct sigul to use our custom directories instead of /var/log and /var/run
-    exec sigul_bridge \
-        -c "$bridge_config" \
-        --internal-log-dir "$LOGS_DIR/bridge" \
-        --internal-pid-dir "$PIDS_DIR" \
-        -v
+    # Try basic startup first without internal directory options
+    debug "Attempting basic sigul_bridge startup..."
+    exec sigul_bridge -c "$bridge_config" -v
 }
 
 # Start sigul client (if applicable)

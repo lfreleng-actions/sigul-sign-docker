@@ -824,8 +824,27 @@ verify_infrastructure() {
         error "❌ Sigul Server container is not running (status: $server_container_status)"
         if [[ "$server_container_status" == "restarting" ]]; then
             error "Server container is in restart loop - check container logs for initialization errors"
-            debug "Server container logs (last 20 lines):"
-            docker logs --tail 20 sigul-server 2>/dev/null || true
+            debug "Server container logs (last 50 lines):"
+            docker logs --tail 50 sigul-server 2>/dev/null || true
+
+            # Check for startup error logs
+            debug "Checking for server startup error logs..."
+            if docker exec sigul-server test -f /var/sigul/logs/server/startup_errors.log 2>/dev/null; then
+                debug "Server startup errors found:"
+                docker exec sigul-server cat /var/sigul/logs/server/startup_errors.log 2>/dev/null || true
+            else
+                debug "No startup error log found at /var/sigul/logs/server/startup_errors.log"
+            fi
+
+            # Check container exit code
+            local server_exit_code
+            server_exit_code=$(docker inspect --format='{{.State.ExitCode}}' sigul-server 2>/dev/null || echo "unknown")
+            debug "Server container last exit code: $server_exit_code"
+
+            # Check container restart count
+            local server_restart_count
+            server_restart_count=$(docker inspect --format='{{.RestartCount}}' sigul-server 2>/dev/null || echo "unknown")
+            debug "Server container restart count: $server_restart_count"
         fi
     elif docker exec sigul-server pgrep -f server >/dev/null 2>&1; then
         success "✅ Sigul Server process is running"
@@ -894,8 +913,27 @@ verify_infrastructure() {
 
             if [[ "$final_container_status" == "restarting" ]]; then
                 error "Container is in restart loop - check container logs for initialization errors"
-                debug "Bridge container logs (last 20 lines):"
-                docker logs --tail 20 sigul-bridge 2>/dev/null || true
+                debug "Bridge container logs (last 50 lines):"
+                docker logs --tail 50 sigul-bridge 2>/dev/null || true
+
+                # Check for startup error logs
+                debug "Checking for bridge startup error logs..."
+                if docker exec sigul-bridge test -f /var/sigul/logs/bridge/startup_errors.log 2>/dev/null; then
+                    debug "Bridge startup errors found:"
+                    docker exec sigul-bridge cat /var/sigul/logs/bridge/startup_errors.log 2>/dev/null || true
+                else
+                    debug "No startup error log found at /var/sigul/logs/bridge/startup_errors.log"
+                fi
+
+                # Check container exit code
+                local exit_code
+                exit_code=$(docker inspect --format='{{.State.ExitCode}}' sigul-bridge 2>/dev/null || echo "unknown")
+                debug "Bridge container last exit code: $exit_code"
+
+                # Check container restart count
+                local restart_count
+                restart_count=$(docker inspect --format='{{.RestartCount}}' sigul-bridge 2>/dev/null || echo "unknown")
+                debug "Bridge container restart count: $restart_count"
             fi
 
             return 1

@@ -70,12 +70,13 @@ services:
       - sigul_bridge_data:/var/sigul
     ports:
       - "44334:44334"
-    healthcheck:
-      test: ["CMD-SHELL", "pgrep -f 'sigul_bridge' >/dev/null 2>&1 || exit 1"]
-      interval: 45s
-      timeout: 15s
-      retries: 5
-      start_period: 120s
+    # Healthcheck temporarily disabled to isolate restart issue
+    # healthcheck:
+    #   test: ["CMD-SHELL", "pgrep -f 'sigul_bridge' >/dev/null 2>&1 || exit 1"]
+    #   interval: 45s
+    #   timeout: 15s
+    #   retries: 5
+    #   start_period: 120s
     networks:
       - sigul-network
     restart: unless-stopped
