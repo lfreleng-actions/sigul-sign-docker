@@ -941,12 +941,32 @@ verify_infrastructure() {
             debug "Extracting bridge logs from persistent volume (if present)..."
             docker run --rm -v sigul_bridge_data:/var/sigul alpine:3.19 sh -c '
               set -e
-              for f in /var/sigul/logs/bridge/daemon.log /var/sigul/logs/bridge/daemon.stdout.log /var/sigul/logs/bridge/startup_errors.log; do
+              echo "===== Bridge Log Directory Listing ====="
+              ls -l /var/sigul/logs/bridge 2>/dev/null || echo "Cannot list /var/sigul/logs/bridge"
+              echo
+              for f in /var/sigul/logs/bridge/daemon.log \
+                       /var/sigul/logs/bridge/daemon.stdout.log \
+                       /var/sigul/logs/bridge/startup_errors.log; do
                 if [ -f "$f" ]; then
                   echo "----- $f -----"
-                  tail -100 "$f" || true
+                  if [ "$(basename "$f")" = "startup_errors.log" ]; then
+                    size=$(wc -c < "$f" 2>/dev/null || echo 0)
+                    if [ "$size" -le 20000 ]; then
+                      cat "$f" || true
+                    else
+                      echo "(File larger than 20KB, showing last 200 lines)"
+                      tail -200 "$f" || true
+                    fi
+                  else
+                    tail -120 "$f" || true
+                  fi
+                  echo
                 fi
               done
+              if [ -f /var/sigul/logs/bridge/strace.bridge.txt ]; then
+                echo "----- /var/sigul/logs/bridge/strace.bridge.txt (tail 120) -----"
+                tail -120 /var/sigul/logs/bridge/strace.bridge.txt || true
+              fi
             ' 2>/dev/null || true
 
             return 1

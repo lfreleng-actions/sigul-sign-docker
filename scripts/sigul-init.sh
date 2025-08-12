@@ -1902,8 +1902,8 @@ start_bridge() {
             echo "Attempting secondary strace (short) if available..."
         } > "$startup_err_file"
 
+        # Secondary short strace (best-effort)
         if command -v strace >/dev/null 2>&1; then
-            # Run a quick strace attempt to capture early syscalls (not replacing original log)
             strace -tt -f -o "$LOGS_DIR/bridge/strace.bridge.txt" \
                 sigul_bridge -c "$bridge_config" -v --internal-log-dir "$LOGS_DIR/bridge" --internal-pid-dir "$PIDS_DIR" >/dev/null 2>&1 || true
             {
@@ -1918,6 +1918,20 @@ start_bridge() {
         if [[ ! -s "$wrapper_log" ]]; then
             echo "NOTE: Wrapper stdout log is empty (process may have aborted before emitting output)" >> "$startup_err_file"
         fi
+
+        # Relax permissions so external diagnostic containers (even if non-root) can read
+        chmod 644 "$wrapper_log" "$startup_err_file" 2>/dev/null || true
+
+        echo "==== BRIDGE STARTUP FAIL (runtime ${runtime}s, rc=$bridge_rc) ====" >&2
+        echo "---- startup_errors.log (full) ----" >&2
+        cat "$startup_err_file" 2>/dev/null || echo "Cannot read startup_err_file" >&2
+        echo "---- wrapper stdout tail (80) ----" >&2
+        tail -80 "$wrapper_log" 2>/dev/null || echo "No wrapper log content" >&2
+        if [[ -f "$LOGS_DIR/bridge/strace.bridge.txt" ]]; then
+            echo "---- strace tail (60) ----" >&2
+            tail -60 "$LOGS_DIR/bridge/strace.bridge.txt" 2>/dev/null || true
+        fi
+        echo "==== END BRIDGE STARTUP FAIL DUMP ====" >&2
 
         # Allow inspection time in debug mode to avoid rapid restart loops
         if [[ "${DEBUG:-false}" == "true" ]]; then
