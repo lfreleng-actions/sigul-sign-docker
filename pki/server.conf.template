@@ -1,0 +1,21 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2025 The Linux Foundation
+
+[server]
+bridge-hostname = sigul-bridge
+bridge-port = 44334
+max-file-payload-size = 2097152
+
+# Database Configuration - SQLite
+[database]
+database-path = /var/lib/sigul/sigul.db
+
+# TLS Configuration using containerized certificates
+ca-cert-file = /var/sigul/secrets/certificates/ca.crt
+server-cert-file = /var/sigul/secrets/certificates/server.crt
+server-key-file = /var/sigul/secrets/certificates/server-key.pem
+require-tls = true
+
+[daemon]
+uid = sigul
+gid = sigul
