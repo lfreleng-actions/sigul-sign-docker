@@ -112,10 +112,10 @@ get_sigul_network_name() {
 # Check if bridge is ready and has exported CA certificate
 wait_for_bridge_ca() {
     log "Waiting for bridge to export CA certificate..."
-    
+
     local max_attempts=30
     local attempt=1
-    
+
     while [[ $attempt -le $max_attempts ]]; do
         if docker exec sigul-bridge test -f /var/sigul/ca-export/bridge-ca.crt 2>/dev/null; then
             success "Bridge CA certificate is ready"
@@ -123,15 +123,56 @@ wait_for_bridge_ca() {
             docker exec sigul-bridge ls -la /var/sigul/ca-export/ 2>/dev/null || true
             return 0
         fi
-        
+
         verbose "Waiting for bridge CA certificate (attempt $attempt/$max_attempts)..."
         sleep 2
         ((attempt++))
     done
-    
+
     error "Bridge CA certificate not ready after $max_attempts attempts"
     error "Bridge container logs:"
     docker logs sigul-bridge 2>&1 | tail -20 || true
+    return 1
+}
+
+# Helper: wait for server service readiness (TCP + process + basic DB file presence)
+wait_for_server_readiness() {
+    verbose "Waiting for server readiness (TCP 44333 + process + DB)..."
+    local max_attempts=25
+    local attempt=1
+    while [[ $attempt -le $max_attempts ]]; do
+        local tcp_ok=false
+        local proc_ok=false
+        local db_ok=false
+
+        if docker exec sigul-server nc -z sigul-bridge 44333 2>/dev/null; then
+            tcp_ok=true
+        fi
+        if docker exec sigul-server pgrep -f "/usr/share/sigul/server.py" >/dev/null 2>&1; then
+            proc_ok=true
+        fi
+        if docker exec sigul-server test -f /var/lib/sigul/server.sqlite 2>/dev/null; then
+            db_ok=true
+        fi
+
+        if [[ "$tcp_ok" == "true" && "$proc_ok" == "true" && "$db_ok" == "true" ]]; then
+            verbose "✓ Server readiness confirmed (attempt $attempt)"
+            return 0
+        fi
+        verbose "Server not ready yet (attempt $attempt/$max_attempts) tcp=$tcp_ok proc=$proc_ok db=$db_ok"
+        sleep 2
+        ((attempt++))
+    done
+
+    warn "⚠ Server readiness timeout after $max_attempts attempts"
+    verbose "Recent sigul-server logs (tail 50):"
+    docker logs sigul-server --tail 50 2>/dev/null || true
+    verbose "Recent sigul-bridge logs (tail 30):"
+    docker logs sigul-bridge --tail 30 2>/dev/null || true
+    verbose "Server process list:"
+    docker exec sigul-server ps aux 2>/dev/null || true
+    verbose "Server /var/lib/sigul listing:"
+    docker exec sigul-server ls -l /var/lib/sigul 2>/dev/null || true
     return 1
 }
 
@@ -154,14 +195,14 @@ start_client_container() {
     # Detect the bridge volume name
     local bridge_volume
     bridge_volume=$(docker volume ls --format "{{.Name}}" | grep -E "(sigul.*bridge.*data|bridge.*data)" | head -n1)
-    
+
     if [[ -z "$bridge_volume" ]]; then
         error "Could not find bridge data volume"
         debug "Available volumes:"
         docker volume ls
         return 1
     fi
-    
+
     verbose "Using bridge volume: $bridge_volume"
 
     # Start the client container with unified initialization
@@ -537,6 +578,12 @@ test_user_key_creation() {
 
     local test_name="User and Key Creation"
 
+    # Ensure server service readiness (TCP, process, DB)
+    if ! wait_for_server_readiness; then
+        test_failed "$test_name" "server not ready for user/key operations"
+        return
+    fi
+
     # Create integration test user
     verbose "Creating integration test user..."
     local network_name
@@ -552,6 +599,16 @@ test_user_key_creation() {
     else
         # User might already exist, which is fine
         verbose "User creation failed (user may already exist)"
+        verbose "Collecting diagnostics for user creation failure..."
+        docker logs sigul-server --tail 25 2>/dev/null || true
+        docker logs sigul-bridge --tail 25 2>/dev/null || true
+        docker exec sigul-bridge nc -zv sigul-server 44333 2>/dev/null || true
+        # Check if user already exists
+        if run_sigul_client_cmd \
+            sigul -c /var/sigul/config/client.conf list-users \
+            --password "$EPHEMERAL_ADMIN_PASSWORD" 2>/dev/null | grep -q "^integration-tester$"; then
+            verbose "integration-tester already present in server database"
+        fi
     fi
 
     # Create signing key
@@ -566,6 +623,10 @@ test_user_key_creation() {
     else
         # Key might already exist, try to continue with existing key
         verbose "Key creation failed (key may already exist)"
+        verbose "Collecting diagnostics for key creation failure..."
+        docker logs sigul-server --tail 25 2>/dev/null || true
+        docker exec sigul-server ls -l /var/lib/sigul 2>/dev/null || true
+        run_sigul_client_cmd sigul -c /var/sigul/config/client.conf list-keys --password "$EPHEMERAL_TEST_PASSWORD" 2>/dev/null || true
         # Test if key exists by trying to list it
         if run_sigul_client_cmd \
             sigul -c /var/sigul/config/client.conf list-keys \
@@ -920,12 +981,12 @@ run_integration_tests() {
         warn "⚠ Client-Bridge TCP connectivity issues detected"
     fi
 
-    # Test 2: Bridge-Server SSL connectivity (port 44333)
-    verbose "Testing Bridge-Server SSL connectivity..."
-    if timeout 10 docker exec sigul-bridge nc -zv sigul-server 44333 2>/dev/null; then
-        verbose "✓ Bridge-Server TCP connectivity verified"
+    # Test 2: Server-Bridge SSL connectivity (port 44333)
+    verbose "Testing Server-Bridge SSL connectivity..."
+    if timeout 10 docker exec sigul-server nc -zv sigul-bridge 44333 2>/dev/null; then
+        verbose "✓ Server-Bridge TCP connectivity verified"
     else
-        warn "⚠ Bridge-Server TCP connectivity issues detected"
+        warn "⚠ Server-Bridge TCP connectivity issues detected"
     fi
 
     verbose "SSL layer verification completed"
