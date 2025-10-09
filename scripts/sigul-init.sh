@@ -210,7 +210,7 @@ import_ca_certificate() {
     fi
 
     # Import CA certificate with appropriate trust flags
-    if certutil -A -d "sql:$nss_dir" -n "$CA_NICKNAME" -t "CT,C,C" -i "$ca_cert_file" >/dev/null 2>&1; then
+    if certutil -A -d "sql:$nss_dir" -n "$CA_NICKNAME" -t "CT,C,C" -i "$ca_cert_file" -f "$password_file" >/dev/null 2>&1; then
         success "CA certificate imported for $component"
     else
         fatal "Failed to import CA certificate for $component"
@@ -500,6 +500,15 @@ server-listen-port = $bridge_server_port
 max-file-payload-size = 67108864
 required-fas-group =
 
+[bridge-server]
+nss-dir = sql:$NSS_BASE_DIR/bridge
+nss-password-file = $nss_password_file
+ca-cert-nickname = $CA_NICKNAME
+bridge-cert-nickname = $BRIDGE_CERT_NICKNAME
+server-hostname = sigul-server
+server-port = $bridge_server_port
+require-tls = true
+
 [daemon]
 unix-user =
 unix-group =
@@ -538,6 +547,7 @@ ca-cert-nickname = $CA_NICKNAME
 client-cert-nickname = $CLIENT_CERT_NICKNAME
 bridge-hostname = $bridge_hostname
 bridge-port = $bridge_client_port
+server-hostname = sigul-server
 require-tls = true
 user-name = $admin_user
 log-level = INFO

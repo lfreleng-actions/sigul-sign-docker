@@ -887,6 +887,27 @@ run_integration_tests() {
     test_key_management
     test_batch_operations
 
+    # Run pytest-based integration tests if available
+    log "Running pytest-based integration tests..."
+    if [[ -f "${SCRIPT_DIR}/run-pytest-integration-tests.sh" ]]; then
+        verbose "Found pytest integration test script, executing..."
+        local pytest_args=()
+
+        # Add verbose flag if enabled
+        if [[ "$VERBOSE_MODE" == "true" ]]; then
+            pytest_args+=("--verbose")
+        fi
+
+        # Run pytest tests
+        if "${SCRIPT_DIR}/run-pytest-integration-tests.sh" "${pytest_args[@]}" 2>&1; then
+            success "Pytest integration tests completed successfully"
+        else
+            warn "Pytest integration tests failed, continuing with shell tests"
+        fi
+    else
+        verbose "Pytest integration test script not found, skipping"
+    fi
+
     # Cleanup and reporting
     cleanup_containers
     generate_test_report

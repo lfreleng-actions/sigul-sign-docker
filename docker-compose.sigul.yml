@@ -342,10 +342,6 @@ volumes:
   sigul_monitor_data:
     driver: local
 
-
-
-
-
 networks:
   sigul-network:
     driver: bridge

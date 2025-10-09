@@ -79,6 +79,10 @@ RUN if getent passwd sigul >/dev/null; then \
     mkdir -p /var/sigul && \
     chown sigul:sigul /var/sigul && \
     chmod 755 /var/sigul && \
+    # Create /var/lib/sigul directory for NSS databases and GPG
+    mkdir -p /var/lib/sigul && \
+    chown sigul:sigul /var/lib/sigul && \
+    chmod 755 /var/lib/sigul && \
     # Set proper permissions on PKI files after user creation
     # Only chmod files that exist (some are generated at runtime)
     if ls /workspace/pki/*.crt >/dev/null 2>&1; then chmod 644 /workspace/pki/*.crt; fi && \
