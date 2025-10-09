@@ -605,9 +605,9 @@ SIGUL_CLIENT_IMAGE=client-linux-arm64-image:test ./scripts/run-integration-tests
 
 # 3. Verify NSS password consistency (should all match)
 echo "Deployment: $(cat test-artifacts/nss-password)"
-echo "Server: $(docker exec sigul-server cat /var/sigul/secrets/server_nss_password)"
-echo "Bridge: $(docker exec sigul-bridge cat /var/sigul/secrets/bridge_nss_password)"
-echo "Client: $(docker exec sigul-client-integration cat /var/sigul/secrets/client_nss_password)"
+echo "Server: $(docker exec sigul-server cat /var/sigul/secrets/nss-password)"
+echo "Bridge: $(docker exec sigul-bridge cat /var/sigul/secrets/nss-password)"
+echo "Client: $(docker exec sigul-client-integration cat /var/sigul/secrets/nss-password)"
 ```
 
 ### 🔍 **Current Issue Investigation Commands**

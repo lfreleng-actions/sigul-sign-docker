@@ -308,11 +308,8 @@ docker exec sigul-server nc -z sigul-bridge 44333
 
 ```
 /var/sigul/secrets/
-├── nss-password
-├── bridge_nss_password
-├── server_nss_password
-├── server_admin_password
-└── client_nss_password
+├── nss-password          # Unified NSS database password for all components
+└── server_admin_password # Server admin user password (optional)
 ```
 
 ### CA Sharing

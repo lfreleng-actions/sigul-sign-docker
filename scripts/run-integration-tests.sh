@@ -287,7 +287,7 @@ import_client_cert_to_bridge() {
         -n sigul-client-cert \
         -t "P,," \
         -a -i /tmp/current-client-cert.pem \
-        -f /var/sigul/secrets/bridge_nss_password 2>/dev/null; then
+        -f /var/sigul/secrets/nss-password 2>/dev/null; then
 
         verbose "Client certificate imported to bridge NSS database"
         return 0
@@ -339,7 +339,7 @@ import_bridge_cert_to_client() {
     # Import to client with proper trust flags for SSL server authentication
     docker cp /tmp/current-bridge-cert.pem "$client_container":/tmp/
 
-    if printf '%s' "$(cat /var/sigul/secrets/client_nss_password || docker exec "$client_container" cat /var/sigul/secrets/client_nss_password)" | docker exec -i "$client_container" certutil -A -d /var/sigul/nss/client \
+    if printf '%s' "$(docker exec "$client_container" cat /var/sigul/secrets/nss-password)" | docker exec -i "$client_container" certutil -A -d /var/sigul/nss/client \
         -n sigul-bridge-cert \
         -t "P,," \
         -a -i /tmp/current-bridge-cert.pem \

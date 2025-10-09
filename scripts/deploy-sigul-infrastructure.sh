@@ -1242,7 +1242,7 @@ import_client_cert_to_bridge() {
         -n sigul-client-cert \
         -t "P,," \
         -a -i /tmp/current-client-cert.pem \
-        -f /var/sigul/secrets/bridge_nss_password 2>/dev/null; then
+        -f /var/sigul/secrets/nss-password 2>/dev/null; then
 
         success "Client certificate imported to bridge NSS database"
 
