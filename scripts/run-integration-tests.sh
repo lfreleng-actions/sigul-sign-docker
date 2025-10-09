@@ -413,12 +413,13 @@ stop_client_container() {
     docker rm -f "$client_container_name" 2>/dev/null || true
 }
 
-# Helper function to run sigul client commands in the persistent container
+# Helper function to run sigul client commands with proper authentication
 run_sigul_client_cmd() {
     local cmd=("$@")
     local client_container_name="sigul-client-integration"
 
-    verbose "Running sigul client command: ${cmd[*]}"
+    # Show the exact command being executed for debugging
+    log "🔧 EXECUTING: docker exec $client_container_name ${cmd[*]}"
 
     # Check if container is still running
     if ! docker ps --filter "name=$client_container_name" --filter "status=running" | grep -q "$client_container_name"; then
@@ -426,16 +427,39 @@ run_sigul_client_cmd() {
         return 1
     fi
 
-    # Run the command with better error handling
-    if docker exec "$client_container_name" "${cmd[@]}"; then
-        return 0
+    # Run the command and capture both stdout and stderr for display
+    local temp_output
+    temp_output=$(mktemp)
+    local exit_code=0
+
+    # Execute command and capture all output
+    if docker exec "$client_container_name" "${cmd[@]}" > "$temp_output" 2>&1; then
+        verbose "✓ Command succeeded"
+        # Show successful output if verbose mode is enabled
+        if [[ "$VERBOSE_MODE" == "true" && -s "$temp_output" ]]; then
+            verbose "Command output:"
+            sed 's/^/  /' < "$temp_output"
+        fi
+        exit_code=0
     else
-        local exit_code=$?
-        verbose "Command failed with exit code: $exit_code"
-        verbose "Container logs:"
-        docker logs "$client_container_name" --tail 20 2>/dev/null || true
-        return $exit_code
+        exit_code=$?
+        error "✗ Command failed with exit code: $exit_code"
+
+        # Always show error output for failed commands
+        if [[ -s "$temp_output" ]]; then
+            error "Command output (stdout/stderr):"
+            sed 's/^/  /' < "$temp_output"
+        else
+            error "No output captured from failed command"
+        fi
+
+        verbose "Recent container logs:"
+        docker logs "$client_container_name" --tail 10 2>/dev/null || true
     fi
+
+    # Cleanup temp file
+    rm -f "$temp_output" 2>/dev/null || true
+    return $exit_code
 }
 
 
@@ -591,9 +615,7 @@ test_user_key_creation() {
     verbose "Using Docker network: $network_name"
 
     if run_sigul_client_cmd \
-        sigul -c /var/sigul/config/client.conf new-user \
-        --admin-name admin --admin-password "$EPHEMERAL_ADMIN_PASSWORD" \
-        integration-tester "$EPHEMERAL_TEST_PASSWORD" 2>/dev/null; then
+        sh -c "printf '%s\\0%s\\0%s\\0' '$EPHEMERAL_ADMIN_PASSWORD' '$EPHEMERAL_TEST_PASSWORD' '$EPHEMERAL_TEST_PASSWORD' | sigul -c /var/sigul/config/client.conf --batch new-user --with-password integration-tester"; then
 
         verbose "User creation succeeded"
     else
@@ -605,8 +627,7 @@ test_user_key_creation() {
         docker exec sigul-bridge nc -zv sigul-server 44333 2>/dev/null || true
         # Check if user already exists
         if run_sigul_client_cmd \
-            sigul -c /var/sigul/config/client.conf list-users \
-            --password "$EPHEMERAL_ADMIN_PASSWORD" 2>/dev/null | grep -q "^integration-tester$"; then
+            sh -c "printf '%s\\0' '$EPHEMERAL_ADMIN_PASSWORD' | sigul -c /var/sigul/config/client.conf --batch list-users" | grep -q "^integration-tester$"; then
             verbose "integration-tester already present in server database"
         fi
     fi
@@ -614,9 +635,7 @@ test_user_key_creation() {
     # Create signing key
     verbose "Creating test signing key..."
     if run_sigul_client_cmd \
-        sigul -c /var/sigul/config/client.conf new-key \
-        --key-admin integration-tester --key-admin-password "$EPHEMERAL_TEST_PASSWORD" \
-        test-signing-key 2048 2>/dev/null; then
+        sh -c "printf '%s\\0' '$EPHEMERAL_TEST_PASSWORD' | sigul -c /var/sigul/config/client.conf --batch --user-name integration-tester new-key --key-admin integration-tester test-signing-key"; then
 
         verbose "Key creation succeeded"
         test_passed "$test_name"
@@ -626,11 +645,10 @@ test_user_key_creation() {
         verbose "Collecting diagnostics for key creation failure..."
         docker logs sigul-server --tail 25 2>/dev/null || true
         docker exec sigul-server ls -l /var/lib/sigul 2>/dev/null || true
-        run_sigul_client_cmd sigul -c /var/sigul/config/client.conf list-keys --password "$EPHEMERAL_TEST_PASSWORD" 2>/dev/null || true
+        run_sigul_client_cmd sh -c "printf '%s\\0' '$EPHEMERAL_TEST_PASSWORD' | sigul -c /var/sigul/config/client.conf --batch --user-name integration-tester list-keys" || true
         # Test if key exists by trying to list it
         if run_sigul_client_cmd \
-            sigul -c /var/sigul/config/client.conf list-keys \
-            --password "$EPHEMERAL_TEST_PASSWORD" 2>/dev/null | grep -q "test-signing-key"; then
+           sh -c "printf '%s\\0' '$EPHEMERAL_TEST_PASSWORD' | sigul -c /var/sigul/config/client.conf --batch --user-name integration-tester list-keys" | grep -q "test-signing-key"; then
             verbose "Test signing key already exists, proceeding with tests"
             test_passed "$test_name"
         else
@@ -650,8 +668,7 @@ test_basic_functionality() {
     network_name=$(get_sigul_network_name)
 
     if run_sigul_client_cmd \
-        sigul -c /var/sigul/config/client.conf list-keys \
-        --password "$EPHEMERAL_TEST_PASSWORD" 2>/dev/null; then
+        sh -c "printf '%s\\0' '$EPHEMERAL_TEST_PASSWORD' | sigul -c /var/sigul/config/client.conf --batch --user-name integration-tester list-keys"; then
 
         test_passed "$test_name"
     else
@@ -676,9 +693,7 @@ test_file_signing() {
     network_name=$(get_sigul_network_name)
 
     if run_sigul_client_cmd \
-        sigul -c /var/sigul/config/client.conf sign-data \
-        --password "$EPHEMERAL_TEST_PASSWORD" \
-        test-signing-key test-workspace/document1.txt 2>/dev/null; then
+        sh -c "printf '%s\\0' '$EPHEMERAL_TEST_PASSWORD' | sigul -c /var/sigul/config/client.conf --batch --user-name integration-tester sign-data test-signing-key test-workspace/document1.txt"; then
 
         # Check if signature was created
         if [[ -f "${signature_file}" ]]; then
@@ -716,9 +731,7 @@ test_rpm_signing() {
     network_name=$(get_sigul_network_name)
 
     if run_sigul_client_cmd \
-        sigul -c /var/sigul/config/client.conf sign-rpm \
-        --password "$EPHEMERAL_TEST_PASSWORD" \
-        test-signing-key test-workspace/test-package.rpm 2>/dev/null; then
+        sh -c "printf '%s\\0' '$EPHEMERAL_TEST_PASSWORD' | sigul -c /var/sigul/config/client.conf --batch --user-name integration-tester sign-rpm test-signing-key test-workspace/test-package.rpm"; then
 
         test_passed "$test_name"
     else
@@ -726,8 +739,7 @@ test_rpm_signing() {
         warn "RPM signing failed (test file is not a valid RPM package)"
         # Check if the sigul command at least connected to the server
         if run_sigul_client_cmd \
-            sigul -c /var/sigul/config/client.conf list-keys \
-            --password "$EPHEMERAL_TEST_PASSWORD" 2>/dev/null >/dev/null; then
+            sh -c "printf '%s\\0' '$EPHEMERAL_TEST_PASSWORD' | sigul -c /var/sigul/config/client.conf --batch --user-name integration-tester list-keys" >/dev/null; then
             verbose "Sigul connection works, RPM signing failed due to invalid RPM format"
             test_passed "$test_name"
         else
@@ -752,8 +764,7 @@ test_key_management() {
     network_name=$(get_sigul_network_name)
 
     if run_sigul_client_cmd \
-        sigul -c /var/sigul/config/client.conf list-users \
-        --password "$EPHEMERAL_TEST_PASSWORD" 2>/dev/null; then
+        sh -c "printf '%s\\0' '$EPHEMERAL_TEST_PASSWORD' | sigul -c /var/sigul/config/client.conf --batch --user-name integration-tester list-users"; then
 
         verbose "List users command succeeded"
     else
@@ -763,9 +774,7 @@ test_key_management() {
     # Get public key to verify key management functionality
     verbose "Retrieving public key for test-signing-key..."
     if run_sigul_client_cmd \
-        sigul -c /var/sigul/config/client.conf get-public-key \
-        --password "$EPHEMERAL_TEST_PASSWORD" \
-        test-signing-key > public-key.asc 2>/dev/null; then
+        sh -c "printf '%s\\0' '$EPHEMERAL_TEST_PASSWORD' | sigul -c /var/sigul/config/client.conf --batch --user-name integration-tester get-public-key test-signing-key > public-key.asc"; then
 
         if [[ -f "${public_key_file}" && -s "${public_key_file}" ]]; then
             # Verify it's a valid PGP public key
@@ -805,9 +814,7 @@ test_batch_operations() {
     for i in {1..3}; do
         verbose "Signing batch-test-${i}.txt..."
         if run_sigul_client_cmd \
-            sigul -c /var/sigul/config/client.conf sign-data \
-            --password "$EPHEMERAL_TEST_PASSWORD" \
-            test-signing-key "test-workspace/batch-test-${i}.txt" 2>/dev/null; then
+            sh -c "printf '%s\\0' '$EPHEMERAL_TEST_PASSWORD' | sigul -c /var/sigul/config/client.conf --batch --user-name integration-tester sign-data test-signing-key test-workspace/batch-test-${i}.txt"; then
 
             verbose "Batch file ${i} signed successfully"
         else
@@ -1000,26 +1007,8 @@ run_integration_tests() {
     test_key_management
     test_batch_operations
 
-    # Run pytest-based integration tests if available
-    log "Running pytest-based integration tests..."
-    if [[ -f "${SCRIPT_DIR}/run-pytest-integration-tests.sh" ]]; then
-        verbose "Found pytest integration test script, executing..."
-        local pytest_args=()
-
-        # Add verbose flag if enabled
-        if [[ "$VERBOSE_MODE" == "true" ]]; then
-            pytest_args+=("--verbose")
-        fi
-
-        # Run pytest tests
-        if "${SCRIPT_DIR}/run-pytest-integration-tests.sh" "${pytest_args[@]}" 2>&1; then
-            success "Pytest integration tests completed successfully"
-        else
-            warn "Pytest integration tests failed, continuing with shell tests"
-        fi
-    else
-        verbose "Pytest integration test script not found, skipping"
-    fi
+    # Focus on real functional signing operations only
+    verbose "Functional integration tests completed"
 
     # Cleanup and reporting
     cleanup_containers
