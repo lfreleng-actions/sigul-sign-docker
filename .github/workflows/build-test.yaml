@@ -1122,13 +1122,13 @@ jobs:
 
           echo "✅ Fresh Sigul infrastructure deployed for functional tests"
 
-      - name: 'Validate NSS certificate trust flags'
+      - name: 'Validate NSS certificates (simplified)'
         shell: bash
         run: |
-          echo '🔍 Validating NSS certificate trust flags to prevent SSL regression...'
-          chmod +x scripts/validate-nss-trust-flags.sh
-          ./scripts/validate-nss-trust-flags.sh
-          echo "✅ NSS certificate trust flag validation passed"
+          echo '🔍 Validating NSS certificates with simplified approach...'
+          chmod +x scripts/validate-nss-simple.sh
+          ./scripts/validate-nss-simple.sh all
+          echo "✅ NSS certificate validation passed"
 
       - name: 'Run integration tests'
         shell: bash

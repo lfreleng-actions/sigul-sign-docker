@@ -12,8 +12,8 @@
 #
 # Key design principles:
 # - All containers use unified /var/sigul directory structure
-# - No legacy config path compatibility mounts
-# - Each container initializes itself with sigul-init.sh
+# - Clean NSS certificate management
+# - Each container initializes itself with NSS-only approach
 # - Consistent UID/GID 1000 (sigul user) across all containers
 #
 # Usage:
@@ -25,7 +25,9 @@
 services:
   # Sigul Server Container
   sigul-server:
-    image: ${SIGUL_SERVER_IMAGE}
+    build:
+      context: .
+      dockerfile: Dockerfile.server
     container_name: sigul-server
     hostname: sigul-server
     user: "1000:1000"
@@ -42,16 +44,23 @@ services:
     volumes:
       # Mount unified sigul directory structure only
       - sigul_server_data:/var/sigul
+      # Server reads CA from bridge data volume
+      - sigul_bridge_data:/var/sigul/bridge-shared:ro
     networks:
       - sigul-network
+    depends_on:
+      sigul-bridge:
+        condition: service_healthy
     restart: unless-stopped
     init: true
-    # Initialize server using unified approach with debug logging
+    # Initialize server using unified sigul-init.sh with debug logging
     command: ["/usr/local/bin/sigul-init.sh", "--role", "server", "--debug", "--start-service"]
 
   # Sigul Bridge Container
   sigul-bridge:
-    image: ${SIGUL_BRIDGE_IMAGE}
+    build:
+      context: .
+      dockerfile: Dockerfile.bridge
     container_name: sigul-bridge
     hostname: sigul-bridge
     user: "1000:1000"
@@ -70,25 +79,26 @@ services:
       - sigul_bridge_data:/var/sigul
     ports:
       - "44334:44334"
-    # Healthcheck temporarily disabled to isolate restart issue
-    # healthcheck:
-    #   test: ["CMD-SHELL", "pgrep -f 'sigul_bridge' >/dev/null 2>&1 || exit 1"]
-    #   interval: 45s
-    #   timeout: 15s
-    #   retries: 5
-    #   start_period: 120s
+    healthcheck:
+      test: ["CMD-SHELL", "certutil -d sql:/var/sigul/nss/bridge -L -n sigul-ca >/dev/null 2>&1 && certutil -d sql:/var/sigul/nss/bridge -L -n sigul-bridge-cert >/dev/null 2>&1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
     networks:
       - sigul-network
     restart: unless-stopped
     init: true
     security_opt:
       - no-new-privileges:true
-    # Initialize bridge using unified approach with debug logging
+    # Initialize bridge using unified sigul-init.sh with debug logging
     command: ["/usr/local/bin/sigul-init.sh", "--role", "bridge", "--debug", "--start-service"]
 
   # Sigul Client Test Environment
   sigul-client-test:
-    image: ${SIGUL_CLIENT_IMAGE:-client-linux-amd64-image:test}
+    build:
+      context: .
+      dockerfile: Dockerfile.client
     container_name: sigul-client-test
     hostname: sigul-client-test
     user: "1000:1000"
@@ -107,13 +117,18 @@ services:
       - ./test-workspace:/workspace:rw
       # Mount unified sigul directory structure only
       - sigul_client_data:/var/sigul
+      # Client reads CA from bridge data volume
+      - sigul_bridge_data:/var/sigul/bridge-shared:ro
     working_dir: /workspace
     networks:
       - sigul-network
+    depends_on:
+      sigul-bridge:
+        condition: service_healthy
     profiles:
       - testing
     restart: "no"
-    # Initialize client using unified approach
+    # Initialize client using unified sigul-init.sh
     command: ["/usr/local/bin/sigul-init.sh", "--role", "client"]
 
   # Bridge Monitor Sidecar (Passive Monitor v2)
@@ -196,20 +211,21 @@ services:
         while true; do
           echo '[$(date)] === Health Check Report ==='
 
-          # Sigul Server Health Check (process-based, no port)
-          echo -n '  Sigul Server (process check): '
-          if docker exec sigul-server pgrep -f server >/dev/null 2>/dev/null; then
+          # Server Health Check (NSS-based)
+          echo -n '  Sigul Server (NSS certificate check): '
+          if docker exec sigul-server certutil -d sql:/var/sigul/nss/server -L -n sigul-ca >/dev/null 2>&1 && \
+             docker exec sigul-server certutil -d sql:/var/sigul/nss/server -L -n sigul-server-cert >/dev/null 2>&1; then
             echo '✅ OK'
           else
             echo '❌ FAIL'
           fi
 
-          # Sigul Bridge Health Check
-          echo -n '  Sigul Bridge (sigul-bridge:44334): '
+          # Sigul Bridge Health Check (NSS + Network)
+          echo -n '  Sigul Bridge (NSS + Network): '
           if nc -z sigul-bridge 44334 2>/dev/null; then
-            echo '✅ OK'
+            echo '✅ OK (Network)'
           else
-            echo '❌ FAIL'
+            echo '❌ FAIL (Network)'
           fi
 
           # Container Status Check
@@ -255,7 +271,7 @@ services:
         echo 'Container hostname: $(hostname)'
         echo 'Container IP: $(hostname -i 2>/dev/null || echo unknown)'
         echo ''
-        echo 'Running comprehensive network tests...'
+        echo 'Running NSS-based network tests...'
         echo ''
         echo "Testing network connectivity to sigul services..."
         echo "✓ Server connects to bridge (no listening port)"
@@ -263,15 +279,15 @@ services:
         echo ''
         echo 'Network tests completed. Container will remain running for manual testing.'
         echo ''
-        echo 'Available manual commands:'
+        echo 'Available manual commands (NSS-only):'
         echo '  - Test network connectivity: nc -z <service> <port>'
-        echo '  - Check certificates: openssl x509 -in /debug/server-data/secrets/certificates/<cert> -text -noout'
+        echo '  - Check NSS certificates: certutil -L -d sql:/debug/server-data/nss/<component>'
         echo '  - View configurations: cat /debug/server-data/config/<config>'
         echo '  - Test connectivity: nc -z <service> <port>'
         echo ''
         echo 'Services to test:'
         echo '  - sigul-bridge:44334 (bridge listens for connections)'
-        echo '  - sigul-server: process check only (connects to bridge)'
+        echo '  - sigul-server: NSS certificate check only (connects to bridge)'
         echo ''
         tail -f /dev/null
 
@@ -295,16 +311,17 @@ services:
       - -c
       - |
         apk add --no-cache curl netcat-openbsd openssl file
-        echo '[$(date)] Debug Helper Container Started'
+        echo '[$(date)] Debug Helper Container Started (NSS-Only)'
         echo 'Available commands:'
         echo '  - Test network connectivity: nc -z <service> <port>'
-        echo '  - Check certificates: openssl x509 -in /debug/server-data/secrets/certificates/<cert> -text -noout'
+        echo '  - Check NSS certificates: certutil -L -d sql:/debug/server-data/nss/<component>'
+        echo '  - List NSS certificates: certutil -L -d sql:/debug/server-data/nss/<component>'
         echo '  - View configurations: cat /debug/server-data/config/<config>'
         echo '  - Inspect volumes: ls -la /debug/<volume>/'
         echo ''
         echo 'Services available:'
         echo '  - sigul-bridge:44334 (bridge listens for connections)'
-        echo '  - sigul-server: process check only (connects to bridge)'
+        echo '  - sigul-server: NSS certificate check only (connects to bridge)'
         echo ''
         tail -f /dev/null
 
@@ -324,6 +341,10 @@ volumes:
   # Monitor data directory for heartbeat files
   sigul_monitor_data:
     driver: local
+
+
+
+
 
 networks:
   sigul-network:

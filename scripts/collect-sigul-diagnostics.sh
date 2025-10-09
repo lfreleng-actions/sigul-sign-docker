@@ -417,31 +417,26 @@ collect_certificate_info() {
         cp -r "$PROJECT_ROOT/pki" "$certs_dir/project-pki" 2>/dev/null || true
 
         # Create certificate analysis
+        # NSS Certificate analysis
         {
-            echo "=== Project PKI Certificate Analysis ==="
-            for cert_file in "$PROJECT_ROOT/pki"/*.crt; do
-                if [[ -f "$cert_file" ]]; then
+            echo "=== NSS Certificate Analysis ==="
+            local component_name=$(echo "$container" | sed 's/sigul-//')
+            local nss_dir="/var/sigul/nss/$component_name"
+
+            echo ""
+            echo "NSS Database: $nss_dir"
+            echo "Certificates in NSS database:"
+            docker exec "$container" certutil -L -d "sql:$nss_dir" 2>/dev/null || echo "Cannot read NSS database"
+            echo ""
+            echo "Certificate details:"
+            for cert_nick in "sigul-ca" "sigul-bridge-cert" "sigul-server-cert" "sigul-client-cert"; do
+                if docker exec "$container" certutil -L -d "sql:$nss_dir" -n "$cert_nick" >/dev/null 2>&1; then
+                    echo "Certificate: $cert_nick"
+                    docker exec "$container" certutil -L -d "sql:$nss_dir" -n "$cert_nick" 2>/dev/null | head -10 || echo "Cannot read certificate details"
                     echo ""
-                    echo "Certificate: $(basename "$cert_file")"
-                    echo "File size: $(stat -c%s "$cert_file" 2>/dev/null || echo "unknown")"
-                    echo "SHA256: $(sha256sum "$cert_file" 2>/dev/null | cut -d' ' -f1 || echo "unknown")"
-
-                    # Certificate details
-                    if openssl x509 -in "$cert_file" -noout -text >/dev/null 2>&1; then
-                        echo "Subject: $(openssl x509 -in "$cert_file" -noout -subject 2>/dev/null || echo "unknown")"
-                        echo "Issuer: $(openssl x509 -in "$cert_file" -noout -issuer 2>/dev/null || echo "unknown")"
-                        echo "Valid from: $(openssl x509 -in "$cert_file" -noout -startdate 2>/dev/null || echo "unknown")"
-                        echo "Valid to: $(openssl x509 -in "$cert_file" -noout -enddate 2>/dev/null || echo "unknown")"
-
-                        # Check if certificate expires soon
-                        if ! openssl x509 -in "$cert_file" -noout -checkend 2592000 2>/dev/null; then
-                            echo "WARNING: Certificate expires within 30 days!"
-                        fi
-                    else
-                        echo "ERROR: Invalid certificate format"
-                    fi
                 fi
             done
+        } >> "$output_file"
         } > "$certs_dir/certificate-analysis.txt"
     fi
 
@@ -453,26 +448,25 @@ collect_certificate_info() {
             # Certificate directory listing
             docker exec "$container" find /var/sigul/secrets/certificates -type f -exec ls -la {} \; > "$certs_dir/${container}.cert-files.txt" 2>/dev/null || true
 
-            # Certificate analysis from container
+            # NSS Certificate analysis from container
             {
-                echo "=== Container Certificate Analysis for $container ==="
-                docker exec "$container" find /var/sigul/secrets/certificates -name "*.crt" -exec sh -c '
-                    for cert_file; do
-                        echo ""
-                        echo "Certificate: $cert_file"
-                        if [ -f "$cert_file" ]; then
-                            echo "File size: $(stat -c%s "$cert_file")"
-                            echo "SHA256: $(sha256sum "$cert_file" | cut -d" " -f1)"
-                            if openssl x509 -in "$cert_file" -noout -text >/dev/null 2>&1; then
-                                echo "Subject: $(openssl x509 -in "$cert_file" -noout -subject)"
-                                echo "Valid to: $(openssl x509 -in "$cert_file" -noout -enddate)"
-                            else
-                                echo "ERROR: Invalid certificate"
-                            fi
-                        else
-                            echo "ERROR: File not found"
-                        fi
-                    done
+                echo "=== Container NSS Certificate Analysis for $container ==="
+                local component_name=$(echo "$container" | sed 's/sigul-//')
+                local nss_db_path="/var/sigul/nss/$component_name"
+                docker exec "$container" sh -c "
+                    if [ -d '$nss_db_path' ]; then
+                        echo ''
+                        echo 'NSS Database: $nss_db_path'
+                        echo 'Database files:'
+                        ls -la '$nss_db_path/'
+                        echo ''
+                        echo 'Certificates in database:'
+                        certutil -L -d 'sql:$nss_db_path' 2>/dev/null || echo 'Cannot read NSS database'
+                    else
+                        echo 'NSS database not found: $nss_db_path'
+                    fi
+                " 2>/dev/null || echo "Cannot access NSS database in container"
+            } >> "$output_file"
                 ' sh {} \; 2>/dev/null || echo "Failed to analyze certificates"
             } > "$certs_dir/${container}.cert-analysis.txt" 2>&1 || true
         fi

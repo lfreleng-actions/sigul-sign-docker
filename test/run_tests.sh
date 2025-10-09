@@ -22,7 +22,6 @@
 # Examples:
 #   ./run_tests.sh                                    # Run all tests
 #   ./run_tests.sh --verbose                          # Run with verbose output
-#   ./run_tests.sh test_validate_certificates.bats    # Run specific test file
 #   ./run_tests.sh --junit --coverage                 # Generate reports
 
 set -euo pipefail
@@ -95,14 +94,10 @@ OPTIONS:
 EXAMPLES:
     $0                                    # Run all tests
     $0 --verbose                          # Run with verbose output
-    $0 test_validate_certificates.bats    # Run specific test file
     $0 --junit --coverage                 # Generate reports
 
 DESCRIPTION:
-    This script runs BATS tests for critical Sigul shell functions including:
-    - validate_certificates
-    - validate_nss_nicknames
-    - NSS private key import functionality
+    This script runs BATS tests for NSS-only Sigul functionality.
 
     Test results can be output in various formats and reports generated
     for integration with CI/CD pipelines.
@@ -247,15 +242,9 @@ show_test_coverage() {
         local test_name
         test_name=$(basename "$test_file" .bats)
         case "$test_name" in
-            "test_validate_certificates")
-                functions_tested+=("validate_certificates")
-                ;;
-            "test_validate_nss_nicknames")
-                functions_tested+=("validate_nss_nicknames")
-                ;;
-            "test_nss_private_key_import")
-                functions_tested+=("import_nss_certificates")
-                functions_tested+=("NSS private key import")
+            # NSS-only tests would go here when created
+            *)
+                functions_tested+=("unknown")
                 ;;
         esac
     done

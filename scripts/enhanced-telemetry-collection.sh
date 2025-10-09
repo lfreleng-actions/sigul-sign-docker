@@ -472,14 +472,13 @@ capture_certificate_telemetry() {
             docker exec "$container" find /var/sigul/secrets/certificates -type f -exec ls -la {} \; 2>/dev/null || echo "Cannot list certificate files"
             echo ""
 
-            echo "=== Certificate Details ==="
-            for cert_file in ca.crt server.crt bridge.crt client.crt; do
-                if docker exec "$container" test -f "/var/sigul/secrets/certificates/$cert_file" 2>/dev/null; then
-                    echo "--- Certificate: $cert_file ---"
-                    docker exec "$container" openssl x509 -in "/var/sigul/secrets/certificates/$cert_file" -text -noout 2>/dev/null | head -20 || echo "Cannot read certificate"
-                    echo ""
-                fi
-            done
+            echo "=== NSS Certificate Details ==="
+            local nss_dir="/var/sigul/nss/${container#sigul-}"
+            if docker exec "$container" test -d "$nss_dir" 2>/dev/null; then
+                echo "--- NSS Certificates in $nss_dir ---"
+                docker exec "$container" certutil -L -d "sql:$nss_dir" 2>/dev/null | head -20 || echo "Cannot read NSS database"
+                echo ""
+            fi
 
             echo "=== Private Key Files ==="
             for key_file in ca-key.pem server-key.pem bridge-key.pem client-key.pem; do
@@ -614,10 +613,6 @@ capture_volume_telemetry() {
                             echo "File: $file"
                             echo "Size: $(stat -c%s "$file") bytes"
                             echo "Permissions: $(stat -c%a "$file")"
-                            if [ "${file##*.}" = "crt" ]; then
-                                echo "Certificate subject:"
-                                openssl x509 -in "$file" -subject -noout 2>/dev/null | sed "s/^/  /" || echo "  Cannot read certificate"
-                            fi
                             echo ""
                         fi
                     done

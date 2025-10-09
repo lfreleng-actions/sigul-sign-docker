@@ -61,16 +61,11 @@ MANIFEST
 
 # Node
 node_modules/*
-# PKI files - allow shared CA and templates, but protect component certificates
-# Allow CA certificate and key (needed for container builds)
-!pki/ca.crt
-!pki/ca-key.pem
-# Ignore component certificates and keys
-pki/*-key.pem
-!pki/ca-key.pem
-pki/*.crt
-!pki/ca.crt
-pki/ca.srl
+# PKI files - NSS certificate management
+# Allow configuration templates and documentation
+!pki/*.conf.template
+!pki/README.md
+# Ignore any generated files
 pki/client-pki-encrypted.asc
 
 # Generated test directories and artifacts (should not be committed)
@@ -82,3 +77,8 @@ test-workspace/
 .env.*
 *.conf.backup.*
 /tmp/nss_password*.tmp
+
+# NSS databases (generated at runtime)
+nss/*/cert9.db
+nss/*/key4.db
+nss/*/pkcs11.txt

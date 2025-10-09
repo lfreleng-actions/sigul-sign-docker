@@ -47,9 +47,16 @@ RUN chmod +x /tmp/install-sigul.sh && \
     /tmp/install-sigul.sh --verify bridge && \
     rm /tmp/install-sigul.sh
 
-# Copy unified initialization script
+# NSS-only initialization
+
+# Copy NSS-only initialization script and validation tools
 COPY scripts/sigul-init.sh /usr/local/bin/sigul-init.sh
-RUN chmod +x /usr/local/bin/sigul-init.sh
+COPY scripts/validate-nss-simple.sh /usr/local/bin/validate-nss-simple.sh
+COPY scripts/lib/health-nss-simple.sh /usr/local/bin/health-nss-simple.sh
+COPY scripts/sigul-config-nss-only.template /usr/local/bin/sigul-config-nss-only.template
+RUN chmod +x /usr/local/bin/sigul-init.sh /usr/local/bin/validate-nss-simple.sh /usr/local/bin/health-nss-simple.sh
+
+# NSS-only certificate management
 
 # Copy shared PKI files for certificate generation (permissions set later after user creation)
 COPY pki/ /workspace/pki/
@@ -75,9 +82,10 @@ RUN if getent passwd sigul >/dev/null; then \
     # Set proper permissions on PKI files after user creation
     # Only chmod files that exist (some are generated at runtime)
     if ls /workspace/pki/*.crt >/dev/null 2>&1; then chmod 644 /workspace/pki/*.crt; fi && \
-    chmod 644 /workspace/pki/*.conf && \
+    if ls /workspace/pki/*.conf >/dev/null 2>&1; then chmod 644 /workspace/pki/*.conf; fi && \
+    if ls /workspace/pki/*.conf.template >/dev/null 2>&1; then chmod 644 /workspace/pki/*.conf.template; fi && \
     if ls /workspace/pki/*-key.pem >/dev/null 2>&1; then chmod 644 /workspace/pki/*-key.pem; fi && \
-    chmod +x /workspace/pki/*.sh && \
+    if ls /workspace/pki/*.sh >/dev/null 2>&1; then chmod +x /workspace/pki/*.sh; fi && \
     chown -R sigul:sigul /workspace/pki/
 
 # Set working directory
@@ -91,9 +99,11 @@ RUN mkdir -p /var/log /var/run && \
 
 USER sigul
 
-# Default command - initialize and start service
+# Default command - initialize and start service (NSS-only by default)
 CMD ["/usr/local/bin/sigul-init.sh", "--role", "bridge", "--start-service"]
 
-# Health check - more robust process check with longer grace period
+# Health check - NSS-based certificate validation with process check
 HEALTHCHECK --interval=45s --timeout=15s --start-period=120s --retries=5 \
-    CMD pgrep -f "sigul_bridge" >/dev/null 2>&1 || exit 1
+    CMD certutil -d sql:/var/sigul/nss/bridge -L -n sigul-ca >/dev/null 2>&1 && \
+        certutil -d sql:/var/sigul/nss/bridge -L -n sigul-bridge-cert >/dev/null 2>&1 && \
+        pgrep -f "sigul_bridge" >/dev/null 2>&1 || exit 1
