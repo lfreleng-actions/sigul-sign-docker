@@ -64,6 +64,11 @@ CONTAINER_STARTUP_TIMEOUT = 60
 HEALTH_CHECK_TIMEOUT = 120
 NSS_PASSWORD = "auto_generated_ephemeral"
 
+# Dynamic image names from environment (for CI/CD compatibility)
+CLIENT_IMAGE = os.environ.get("SIGUL_CLIENT_IMAGE", "client-linux-amd64-image:test")
+SERVER_IMAGE = os.environ.get("SIGUL_SERVER_IMAGE", "server-linux-amd64-image:test")
+BRIDGE_IMAGE = os.environ.get("SIGUL_BRIDGE_IMAGE", "bridge-linux-amd64-image:test")
+
 
 class SigulTestFixture:
     """Test fixture for managing Sigul stack lifecycle"""
@@ -333,10 +338,10 @@ class TestInfrastructure:
         )
 
         # Test internal connectivity (bridge can reach server)
-        exit_code, output, error = sigul_stack.run_command_in_container(
-            "bridge", ["nc", "-z", "sigul-server", str(SERVER_PORT)]
-        )
-        assert exit_code == 0, f"Bridge cannot reach server: {error}"
+        # Note: In Sigul architecture, server connects TO bridge, not vice versa
+        # This test is disabled as it checks incorrect connectivity direction
+        # The server should establish connection to bridge, not be reachable by bridge
+        pass
 
 
 class TestCertificates:
@@ -442,12 +447,10 @@ class TestCommunication:
     def test_bridge_server_connectivity(self, sigul_stack):
         """Test that bridge can connect to server"""
         # Test TCP connectivity
-        exit_code, output, error = sigul_stack.run_command_in_container(
-            "bridge", ["nc", "-z", "sigul-server", str(SERVER_PORT)]
-        )
-        assert exit_code == 0, (
-            f"Bridge cannot reach server on port {SERVER_PORT}: {error}"
-        )
+        # Note: In Sigul architecture, server connects TO bridge, not vice versa
+        # This test is disabled as it checks incorrect connectivity direction
+        # The server should establish connection to bridge, not be reachable by bridge
+        pass
 
     def test_bridge_configuration(self, sigul_stack):
         """Test bridge configuration is correct"""
@@ -509,7 +512,7 @@ class TestCommunication:
             "SIGUL_BRIDGE_HOSTNAME=sigul-bridge",
             "-e",
             f"SIGUL_BRIDGE_CLIENT_PORT={BRIDGE_PORT}",
-            "sigul-sign-docker-sigul-client-test",
+            CLIENT_IMAGE,
             "/usr/local/bin/sigul-init.sh",
             "--role",
             "client",
@@ -527,7 +530,7 @@ class TestCommunication:
             "1000:1000",
             "-v",
             "sigul-sign-docker_sigul_client_data:/var/sigul",
-            "sigul-sign-docker-sigul-client-test",
+            CLIENT_IMAGE,
             "cat",
             "/var/sigul/config/client.conf",
         ]
@@ -576,9 +579,10 @@ class TestAuthentication:
                 tls_test_cmd, input="QUIT\n", capture_output=True, text=True, timeout=30
             )
             # Even if verification fails, we should see SSL handshake attempt
-            assert (
-                "SSL-Session:" in result.stderr or "Certificate chain" in result.stderr
-            ), f"No TLS handshake detected: {result.stderr}"
+            output = result.stdout + result.stderr
+            assert "SSL-Session:" in output or "Certificate chain" in output, (
+                f"No TLS handshake detected: {output}"
+            )
         except subprocess.TimeoutExpired:
             pytest.fail("TLS connection test timed out")
 
@@ -597,7 +601,7 @@ class TestAuthentication:
             "sigul-sign-docker_sigul_client_data:/var/sigul",
             "-v",
             "sigul-sign-docker_sigul_bridge_data:/var/sigul/bridge-shared:ro",
-            "sigul-sign-docker-sigul-client-test",
+            CLIENT_IMAGE,
             "bash",
             "-c",
             "timeout 10 sigul -c /var/sigul/config/client.conf list-users 2>&1 || true",
@@ -700,7 +704,7 @@ class TestFunctional:
             "SIGUL_ROLE=client",
             "-e",
             f"NSS_PASSWORD={NSS_PASSWORD}",
-            "sigul-sign-docker-sigul-client-test",
+            CLIENT_IMAGE,
             "/usr/local/bin/sigul-init.sh",
             "--role",
             "client",
@@ -719,7 +723,7 @@ class TestFunctional:
             NETWORK_NAME,
             "-v",
             "sigul-sign-docker_sigul_client_data:/var/sigul",
-            "sigul-sign-docker-sigul-client-test",
+            CLIENT_IMAGE,
             "bash",
             "-c",
             "echo 'test123' | timeout 15 sigul -c /var/sigul/config/client.conf list-users 2>&1 || true",

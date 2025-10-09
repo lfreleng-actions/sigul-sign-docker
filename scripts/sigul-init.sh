@@ -410,8 +410,7 @@ setup_server_certificates() {
     # Generate server certificate
     generate_component_certificate "server" "$SERVER_CERT_NICKNAME"
 
-    # Initialize database file
-    initialize_server_database
+    # Note: Database initialization moved to after configuration generation
 }
 
 #######################################
@@ -461,15 +460,48 @@ initialize_server_database() {
     log "Initializing server database"
 
     local db_file="$DB_DIR/server.sqlite"
+    local config_file="$CONFIG_DIR/server.conf"
+    local admin_user="${SIGUL_ADMIN_USER:-admin}"
+    local admin_password="${SIGUL_ADMIN_PASSWORD:-sigul123}"
 
-    # Create database file if it doesn't exist
-    if [[ ! -f "$db_file" ]]; then
-        touch "$db_file"
-        chmod 644 "$db_file"
-        success "Database file created: $db_file"
+    # Create database directory if it doesn't exist
+    mkdir -p "$DB_DIR"
+    chmod 755 "$DB_DIR"
+
+    # Create database schema using sigul_server_create_db
+    log "Creating server database schema"
+    if sigul_server_create_db -c "$config_file" >/dev/null 2>&1; then
+        success "Server database schema created"
     else
-        debug "Database file already exists: $db_file"
+        # Database might already exist, check if tables are present
+        if sqlite3 "$db_file" ".tables" 2>/dev/null | grep -q "users"; then
+            debug "Database schema already exists"
+        else
+            fatal "Failed to create server database schema"
+        fi
     fi
+
+    # Check if admin user already exists
+    if sqlite3 "$db_file" "SELECT COUNT(*) FROM users WHERE name='$admin_user' AND admin=1;" 2>/dev/null | grep -q "1"; then
+        debug "Admin user '$admin_user' already exists"
+        return 0
+    fi
+
+    # Create admin user using sigul_server_add_admin
+    log "Creating admin user: $admin_user"
+
+    # Use printf to provide password twice (confirmation) in batch mode
+    if printf "%s\\0%s\\0" "$admin_password" "$admin_password" | \
+       sigul_server_add_admin -c "$config_file" --name "$admin_user" --batch >/dev/null 2>&1; then
+        success "Admin user '$admin_user' created successfully"
+    else
+        error "Failed to create admin user '$admin_user'"
+        # Don't fail fatally here as the server might still work for some operations
+        log "Server will continue without admin user - manual creation may be required"
+    fi
+
+    # Set proper permissions on database file
+    chmod 644 "$db_file"
 }
 
 generate_configuration() {
@@ -672,6 +704,11 @@ initialize_component() {
     # Generate configuration
     generate_configuration "$role"
 
+    # Initialize server database after configuration is generated
+    if [[ "$role" == "server" ]]; then
+        initialize_server_database
+    fi
+
     # Validate setup
     if ! validate_nss_setup "$role"; then
         fatal "NSS setup validation failed for $role"
@@ -710,6 +747,7 @@ Environment Variables:
   SIGUL_BRIDGE_CLIENT_PORT   Bridge client port (default: 44334)
   SIGUL_BRIDGE_SERVER_PORT   Bridge server port (default: 44333)
   SIGUL_ADMIN_USER          Admin username (default: admin)
+  SIGUL_ADMIN_PASSWORD      Admin password (default: sigul123)
   DEBUG                     Enable debug mode (default: false)
 
 EOF
