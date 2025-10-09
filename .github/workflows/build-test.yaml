@@ -1122,13 +1122,60 @@ jobs:
 
           echo "✅ Fresh Sigul infrastructure deployed for functional tests"
 
-      - name: 'Validate NSS certificates (simplified)'
+      - name: 'Validate NSS certificates in containers'
         shell: bash
         run: |
-          echo '🔍 Validating NSS certificates...'
-          chmod +x scripts/validate-nss.sh
-          ./scripts/validate-nss.sh all
-          echo "✅ NSS certificate validation passed"
+          echo '🔍 Validating NSS certificates inside containers...'
+
+          # Debug: Show all running containers
+          echo "📋 Current container status:"
+          docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+
+          # Check that containers are running and healthy
+          BRIDGE_STATUS=$(docker ps --filter "name=sigul-bridge" --format "{{.Status}}" || echo "not found")
+          SERVER_STATUS=$(docker ps --filter "name=sigul-server" --format "{{.Status}}" || echo "not found")
+
+          echo "🔍 Container status check:"
+          echo "  Bridge: $BRIDGE_STATUS"
+          echo "  Server: $SERVER_STATUS"
+
+          if ! docker ps --format "{{.Names}}" | grep -q "^sigul-bridge$"; then
+            echo "❌ sigul-bridge container not running (status: $BRIDGE_STATUS)"
+            echo "📋 All containers:"
+            docker ps -a --format "table {{.Names}}\t{{.Status}}\t{{.Image}}"
+            echo "📋 Bridge container logs:"
+            docker logs sigul-bridge 2>&1 | tail -20 || echo "No logs available"
+            exit 1
+          fi
+
+          if ! docker ps --format "{{.Names}}" | grep -q "^sigul-server$"; then
+            echo "❌ sigul-server container not running (status: $SERVER_STATUS)"
+            echo "📋 All containers:"
+            docker ps -a --format "table {{.Names}}\t{{.Status}}\t{{.Image}}"
+            echo "📋 Server container logs:"
+            docker logs sigul-server 2>&1 | tail -20 || echo "No logs available"
+            exit 1
+          fi
+
+          # Validate NSS certificates inside the bridge container
+          echo "🔍 Validating bridge NSS certificates..."
+          if docker exec sigul-bridge /usr/local/bin/validate-nss.sh bridge; then
+            echo "✅ Bridge NSS validation passed"
+          else
+            echo "❌ Bridge NSS validation failed"
+            exit 1
+          fi
+
+          # Validate NSS certificates inside the server container
+          echo "🔍 Validating server NSS certificates..."
+          if docker exec sigul-server /usr/local/bin/validate-nss.sh server; then
+            echo "✅ Server NSS validation passed"
+          else
+            echo "❌ Server NSS validation failed"
+            exit 1
+          fi
+
+          echo "✅ All NSS certificate validations passed"
 
       - name: 'Run integration tests'
         shell: bash
