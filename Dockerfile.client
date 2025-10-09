@@ -45,9 +45,9 @@ RUN chmod +x /tmp/install-sigul.sh && \
 # Copy NSS-only initialization script and validation tools
 COPY scripts/sigul-init.sh /usr/local/bin/sigul-init.sh
 COPY scripts/validate-nss-simple.sh /usr/local/bin/validate-nss-simple.sh
-COPY scripts/lib/health-nss-simple.sh /usr/local/bin/health-nss-simple.sh
+COPY scripts/lib/health.sh /usr/local/bin/health.sh
 COPY scripts/sigul-config-nss-only.template /usr/local/bin/sigul-config-nss-only.template
-RUN chmod +x /usr/local/bin/sigul-init.sh /usr/local/bin/validate-nss-simple.sh /usr/local/bin/health-nss-simple.sh
+RUN chmod +x /usr/local/bin/sigul-init.sh /usr/local/bin/validate-nss-simple.sh /usr/local/bin/health.sh
 
 # NSS-only certificate management
 

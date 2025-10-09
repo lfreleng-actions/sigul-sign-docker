@@ -311,7 +311,7 @@ This document summarizes the complete migration from legacy PEM validation to NS
 - `scripts/setup-client-certs.sh` - Functionality moved to NSS-only init
 - `scripts/generate-complete-pki.sh` - OpenSSL PKI generation (obsolete)
 - `scripts/generate-test-pki.sh` - OpenSSL PKI generation (obsolete)
-- `scripts/lib/health.sh` - Replaced by `scripts/lib/health-nss-simple.sh`
+- `scripts/lib/health-nss-simple.sh` - Renamed to `scripts/lib/health.sh`
 
 ### Deleted Legacy Test Files
 - `test/test_validate_certificates.bats` - Tested deleted PEM functions
@@ -326,7 +326,7 @@ This document summarizes the complete migration from legacy PEM validation to NS
 ### Core Scripts
 - `scripts/sigul-init-nss-only.sh` - Clean NSS-only initialization
 - `scripts/validate-nss-simple.sh` - Simple NSS certificate validation
-- `scripts/lib/health-nss-simple.sh` - Lightweight NSS health checks
+- `scripts/lib/health.sh` - Lightweight NSS health checks
 - `scripts/test-nss-only-deployment.sh` - Comprehensive NSS testing
 
 ### Configuration

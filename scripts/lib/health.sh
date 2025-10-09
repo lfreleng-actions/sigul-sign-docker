@@ -14,7 +14,7 @@
 # - Minimal dependencies (only certutil and basic shell tools)
 #
 # Usage:
-#   source scripts/lib/health-nss-simple.sh
+#   source scripts/lib/health.sh
 #   nss_health_check_bridge
 #   nss_health_check_server
 #   nss_health_check_client

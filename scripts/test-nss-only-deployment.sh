@@ -206,7 +206,7 @@ test_nss_init_script() {
 test_nss_health_library() {
     log "Testing NSS health check library"
 
-    local script_path="$SCRIPT_DIR/lib/health-nss-simple.sh"
+    local script_path="$SCRIPT_DIR/lib/health.sh"
 
     # Test 1: Library exists
     if [[ -f "$script_path" ]]; then

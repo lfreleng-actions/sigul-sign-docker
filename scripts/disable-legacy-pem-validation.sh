@@ -386,9 +386,9 @@ Use \`sigul-init-nss-only.sh\` for component initialization:
 \`\`\`
 
 ### Health Check Library
-Use \`health-nss-simple.sh\` for health checks:
+Use \`health.sh\` for health checks:
 \`\`\`bash
-source scripts/lib/health-nss-simple.sh
+source scripts/lib/health.sh
 nss_health_check_all
 \`\`\`
 
@@ -501,7 +501,7 @@ The script will:
 After running this script, use the new NSS-only tools:
 - validate-nss-simple.sh for validation
 - sigul-init-nss-only.sh for initialization
-- health-nss-simple.sh for health checks
+- health.sh for health checks
 
 EOF
 }
