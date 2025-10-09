@@ -205,7 +205,7 @@ disable_openssl_functions() {
         print "# DISABLED: Legacy PEM validation function - replaced by NSS-only validation"
         print $0 "_DISABLED() {"
         print "    warn \"Legacy PEM function disabled: " $0 "\""
-        print "    warn \"Use NSS-only validation instead: validate-nss-simple.sh\""
+        print "    warn \"Use NSS-only validation instead: validate-nss.sh\""
         print "    return 1"
         in_openssl_function = 1
         disabled_functions++
@@ -285,7 +285,7 @@ add_nss_only_header() {
         print "# NSS-ONLY VALIDATION MODE"
         print "# This script has been modified to use NSS-only certificate validation."
         print "# Legacy PEM/OpenSSL validation functions have been disabled."
-        print "# Use validate-nss-simple.sh for certificate validation."
+        print "# Use validate-nss.sh for certificate validation."
         print "# Use sigul-init-nss-only.sh for initialization."
         print ""
         header_added = 1
@@ -366,13 +366,13 @@ PEM file configuration options have been replaced with NSS nicknames:
 ## New NSS-Only Tools
 
 ### Validation Script
-Use \`validate-nss-simple.sh\` for certificate validation:
+Use \`validate-nss.sh\` for certificate validation:
 \`\`\`bash
 # Validate all components
-./scripts/validate-nss-simple.sh all
+./scripts/validate-nss.sh all
 
 # Validate specific component
-./scripts/validate-nss-simple.sh bridge
+./scripts/validate-nss.sh bridge
 \`\`\`
 
 ### Initialization Script
@@ -499,7 +499,7 @@ The script will:
 5. Update configurations to use NSS nicknames
 
 After running this script, use the new NSS-only tools:
-- validate-nss-simple.sh for validation
+- validate-nss.sh for validation
 - sigul-init-nss-only.sh for initialization
 - health.sh for health checks
 
@@ -575,7 +575,7 @@ main() {
         log ""
         log "Next steps:"
         log "1. Test with: docker compose -f docker-compose.sigul.yml up"
-        log "2. Validate with: ./scripts/validate-nss-simple.sh all"
+        log "2. Validate with: ./scripts/validate-nss.sh all"
         log "3. Review migration report: $MIGRATION_REPORT"
     fi
 }

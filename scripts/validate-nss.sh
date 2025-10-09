@@ -14,7 +14,7 @@
 # - Clear pass/fail results without complex diagnostics
 #
 # Usage:
-#   ./validate-nss-simple.sh [component]
+#   ./validate-nss.sh [component]
 #
 # Arguments:
 #   component - Optional: bridge|server|client|all (default: all)

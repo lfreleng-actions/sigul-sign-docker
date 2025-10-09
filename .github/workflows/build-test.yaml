@@ -1125,9 +1125,9 @@ jobs:
       - name: 'Validate NSS certificates (simplified)'
         shell: bash
         run: |
-          echo '🔍 Validating NSS certificates with simplified approach...'
-          chmod +x scripts/validate-nss-simple.sh
-          ./scripts/validate-nss-simple.sh all
+          echo '🔍 Validating NSS certificates...'
+          chmod +x scripts/validate-nss.sh
+          ./scripts/validate-nss.sh all
           echo "✅ NSS certificate validation passed"
 
       - name: 'Run integration tests'

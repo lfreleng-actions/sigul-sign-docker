@@ -150,7 +150,7 @@ cleanup_test_environment() {
 test_nss_validation_script() {
     log "Testing NSS validation script"
 
-    local script_path="$SCRIPT_DIR/validate-nss-simple.sh"
+    local script_path="$SCRIPT_DIR/validate-nss.sh"
 
     # Test 1: Script exists and is executable
     if [[ -x "$script_path" ]]; then

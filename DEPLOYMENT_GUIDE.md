@@ -36,7 +36,7 @@ cd sigul-sign-docker
 
 # Verify all required files are present
 ls -la scripts/sigul-init-nss-only.sh
-ls -la scripts/validate-nss-simple.sh
+ls -la scripts/validate-nss.sh
 ls -la docker-compose.sigul.yml
 ```
 
@@ -70,7 +70,7 @@ docker compose -f docker-compose.sigul.yml up -d sigul-client-test
 
 ```bash
 # Run certificate validation
-./scripts/validate-nss-simple.sh all
+./scripts/validate-nss.sh all
 
 # Run integration test
 ./scripts/run-integration-test.sh

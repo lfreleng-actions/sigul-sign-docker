@@ -9,7 +9,7 @@
 #
 # Key Changes:
 # - Replace sigul-init.sh with sigul-init-nss-only.sh
-# - Replace validate-nss-certificates.sh with validate-nss-simple.sh
+# - Replace validate-nss-certificates.sh with validate-nss.sh
 # - Remove references to deleted setup-*.sh scripts
 # - Update examples and usage instructions
 #
@@ -76,11 +76,11 @@ declare -a DOC_FILES=(
 # Script mapping: old_script -> new_script
 declare -A SCRIPT_REPLACEMENTS=(
     ["sigul-init.sh"]="sigul-init-nss-only.sh"
-    ["validate-nss-certificates.sh"]="validate-nss-simple.sh"
+    ["validate-nss-certificates.sh"]="validate-nss.sh"
     ["setup-bridge-ca.sh"]="sigul-init-nss-only.sh --role bridge"
     ["setup-server-certs.sh"]="sigul-init-nss-only.sh --role server"
     ["setup-client-certs.sh"]="sigul-init-nss-only.sh --role client"
-    ["validate-nss-trust-flags.sh"]="validate-nss-simple.sh"
+    ["validate-nss-trust-flags.sh"]="validate-nss.sh"
 )
 
 # Function name mapping: old_function -> new_approach
@@ -243,9 +243,9 @@ update_examples() {
 
     # Update common example patterns
     sed -e 's|./scripts/sigul-init.sh --role|./scripts/sigul-init-nss-only.sh --role|g' \
-        -e 's|./scripts/validate-nss-certificates.sh|./scripts/validate-nss-simple.sh|g' \
-        -e 's|docker exec.*validate-nss-certificates.sh|./scripts/validate-nss-simple.sh|g' \
-        -e 's|ls -la scripts/setup-\*.sh|ls -la scripts/sigul-init-nss-only.sh scripts/validate-nss-simple.sh|g' \
+        -e 's|./scripts/validate-nss-certificates.sh|./scripts/validate-nss.sh|g' \
+        -e 's|docker exec.*validate-nss-certificates.sh|./scripts/validate-nss.sh|g' \
+        -e 's|ls -la scripts/setup-\*.sh|ls -la scripts/sigul-init-nss-only.sh scripts/validate-nss.sh|g' \
         "$file" > "$temp_file"
 
     if ! cmp -s "$file" "$temp_file"; then
@@ -304,7 +304,7 @@ This document summarizes the complete migration from legacy PEM validation to NS
 
 ### Deleted Legacy PEM Scripts
 - `scripts/sigul-init.sh` - Replaced by `scripts/sigul-init-nss-only.sh`
-- `scripts/validate-nss-certificates.sh` - Replaced by `scripts/validate-nss-simple.sh`
+- `scripts/validate-nss-certificates.sh` - Replaced by `scripts/validate-nss.sh`
 - `scripts/validate-nss-trust-flags.sh` - Replaced by simplified NSS validation
 - `scripts/setup-bridge-ca.sh` - Functionality moved to NSS-only init
 - `scripts/setup-server-certs.sh` - Functionality moved to NSS-only init
@@ -325,7 +325,7 @@ This document summarizes the complete migration from legacy PEM validation to NS
 
 ### Core Scripts
 - `scripts/sigul-init-nss-only.sh` - Clean NSS-only initialization
-- `scripts/validate-nss-simple.sh` - Simple NSS certificate validation
+- `scripts/validate-nss.sh` - NSS certificate validation
 - `scripts/lib/health.sh` - Lightweight NSS health checks
 - `scripts/test-nss-only-deployment.sh` - Comprehensive NSS testing
 
@@ -369,7 +369,7 @@ All documentation files have been updated to:
 - Updated to exclude only necessary files
 
 ### GitHub Workflows
-- Updated to use `validate-nss-simple.sh` instead of trust flags validation
+- Updated to use `validate-nss.sh` instead of trust flags validation
 - Simplified CI validation steps
 
 ## Benefits Realized
