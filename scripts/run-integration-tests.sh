@@ -109,21 +109,67 @@ get_sigul_network_name() {
     echo "${project_name}_sigul-network"
 }
 
+# Check if bridge is ready and has exported CA certificate
+wait_for_bridge_ca() {
+    log "Waiting for bridge to export CA certificate..."
+    
+    local max_attempts=30
+    local attempt=1
+    
+    while [[ $attempt -le $max_attempts ]]; do
+        if docker exec sigul-bridge test -f /var/sigul/ca-export/bridge-ca.crt 2>/dev/null; then
+            success "Bridge CA certificate is ready"
+            verbose "Bridge CA export contents:"
+            docker exec sigul-bridge ls -la /var/sigul/ca-export/ 2>/dev/null || true
+            return 0
+        fi
+        
+        verbose "Waiting for bridge CA certificate (attempt $attempt/$max_attempts)..."
+        sleep 2
+        ((attempt++))
+    done
+    
+    error "Bridge CA certificate not ready after $max_attempts attempts"
+    error "Bridge container logs:"
+    docker logs sigul-bridge 2>&1 | tail -20 || true
+    return 1
+}
+
 # Start a persistent client container for integration tests
 start_client_container() {
     local network_name="$1"
     local client_container_name="sigul-client-integration"
+
+    # Wait for bridge to be ready first
+    if ! wait_for_bridge_ca; then
+        error "Bridge not ready for client initialization"
+        return 1
+    fi
 
     log "Starting persistent client container for integration tests..."
 
     # Remove any existing client container
     docker rm -f "$client_container_name" 2>/dev/null || true
 
+    # Detect the bridge volume name
+    local bridge_volume
+    bridge_volume=$(docker volume ls --format "{{.Name}}" | grep -E "(sigul.*bridge.*data|bridge.*data)" | head -n1)
+    
+    if [[ -z "$bridge_volume" ]]; then
+        error "Could not find bridge data volume"
+        debug "Available volumes:"
+        docker volume ls
+        return 1
+    fi
+    
+    verbose "Using bridge volume: $bridge_volume"
+
     # Start the client container with unified initialization
     if ! docker run -d --name "$client_container_name" \
         --network "$network_name" \
         --user sigul \
         -v "${PROJECT_ROOT}:/workspace:rw" \
+        -v "${bridge_volume}":/var/sigul/bridge-shared:ro \
         -w /workspace \
         -e SIGUL_ROLE=client \
         -e SIGUL_BRIDGE_HOSTNAME=sigul-bridge \
@@ -151,6 +197,12 @@ start_client_container() {
     verbose "Initializing sigul client in container..."
     verbose "Client container logs before init:"
     docker logs "$client_container_name" 2>/dev/null || true
+
+    # Debug: Check what's available in the bridge-shared volume
+    verbose "Debugging bridge-shared volume contents:"
+    docker exec "$client_container_name" sh -c 'ls -la /var/sigul/bridge-shared/ 2>/dev/null || echo "bridge-shared not accessible"'
+    docker exec "$client_container_name" sh -c 'ls -la /var/sigul/bridge-shared/ca-export/ 2>/dev/null || echo "ca-export directory not found"'
+    docker exec "$client_container_name" sh -c 'find /var/sigul/bridge-shared/ -name "*ca*" -type f 2>/dev/null || echo "no CA files found"'
 
     if docker exec "$client_container_name" /usr/local/bin/sigul-init.sh --role client 2>&1; then
         success "Client container initialized successfully"
