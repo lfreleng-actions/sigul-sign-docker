@@ -977,26 +977,74 @@ run_integration_tests() {
         return 1
     fi
 
-    # Add SSL layer connectivity verification before running tests
-    verbose "Verifying SSL connectivity layers before integration tests..."
+    # Add actual SSL handshake verification before running tests
+    verbose "Verifying SSL handshake connectivity before integration tests..."
 
-    # Test 1: Client-Bridge SSL connectivity (port 44334)
-    verbose "Testing Client-Bridge SSL connectivity..."
+    # Test 1: Client-Bridge TCP connectivity (port 44334)
+    verbose "Testing Client-Bridge TCP connectivity..."
     if timeout 10 docker exec sigul-client-integration nc -zv sigul-bridge 44334 2>/dev/null; then
         verbose "✓ Client-Bridge TCP connectivity verified"
     else
         warn "⚠ Client-Bridge TCP connectivity issues detected"
     fi
 
-    # Test 2: Server-Bridge SSL connectivity (port 44333)
-    verbose "Testing Server-Bridge SSL connectivity..."
+    # Test 2: Server-Bridge TCP connectivity (port 44333)
+    verbose "Testing Server-Bridge TCP connectivity..."
     if timeout 10 docker exec sigul-server nc -zv sigul-bridge 44333 2>/dev/null; then
         verbose "✓ Server-Bridge TCP connectivity verified"
     else
         warn "⚠ Server-Bridge TCP connectivity issues detected"
     fi
 
-    verbose "SSL layer verification completed"
+    # Test 3: Actual SSL handshake verification
+    verbose "Testing actual SSL handshake (Client-Bridge)..."
+    local ssl_handshake_success=false
+    
+    # First, verify NSS database and certificates are accessible
+    if docker exec sigul-client-integration certutil -L -d /var/sigul/nss/client >/dev/null 2>&1; then
+        verbose "✓ Client NSS database is accessible"
+        
+        # Check if required certificates exist
+        if docker exec sigul-client-integration certutil -L -d /var/sigul/nss/client -n sigul-bridge-cert >/dev/null 2>&1; then
+            verbose "✓ Bridge certificate found in client NSS database"
+            
+            # Test actual SSL handshake using tstclnt
+            if timeout 15 docker exec sigul-client-integration \
+                tstclnt -h sigul-bridge -p 44334 \
+                -d /var/sigul/nss/client \
+                -w /var/sigul/secrets/nss-password \
+                -v >/dev/null 2>&1; then
+                
+                verbose "✓ SSL handshake successful - certificates and NSS are working"
+                ssl_handshake_success=true
+            else
+                warn "⚠ SSL handshake failed with tstclnt - trying OpenSSL fallback"
+                
+                # Fallback: Test basic SSL connectivity with OpenSSL
+                if echo "QUIT" | timeout 10 docker exec -i sigul-client-integration \
+                    openssl s_client -connect sigul-bridge:44334 -quiet >/dev/null 2>&1; then
+                    
+                    verbose "✓ Basic SSL connection works (OpenSSL), but NSS handshake failed"
+                    warn "This may indicate NSS-specific certificate or trust issues"
+                else
+                    error "✗ Both NSS and OpenSSL SSL handshakes failed"
+                fi
+            fi
+        else
+            error "✗ Bridge certificate not found in client NSS database"
+            verbose "Available certificates:"
+            docker exec sigul-client-integration certutil -L -d /var/sigul/nss/client || true
+        fi
+    else
+        error "✗ Client NSS database is not accessible"
+    fi
+
+    if [[ "$ssl_handshake_success" == "true" ]]; then
+        verbose "SSL handshake verification completed successfully"
+    else
+        warn "SSL handshake verification failed - sigul operations may encounter 'Unexpected EOF in NSPR' errors"
+        warn "This indicates certificate or NSS configuration issues"
+    fi
 
     # Run comprehensive test suite against functional infrastructure
     log "Running real cryptographic operations..."

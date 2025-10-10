@@ -277,8 +277,34 @@ generate_component_certificate() {
     entropy_file=$(mktemp)
     head -c 1024 /dev/urandom > "$entropy_file"
 
-    if certutil -S -d "sql:$nss_dir" -n "$cert_nickname" -s "$subject" -c "$CA_NICKNAME" -t "u,u,u" -f "$password_file" -k rsa -g 2048 -z "$entropy_file" >/dev/null 2>&1; then
+    # Generate certificate with component-specific trust flags
+    local trust_flags="u,u,u"
+    
+    # Set appropriate trust flags based on component
+    if [[ "$component" == "client" ]]; then
+        # Client certificates need user trust for SSL client authentication
+        trust_flags="u,u,u"
+        debug "Generating client certificate for SSL client authentication"
+    elif [[ "$component" == "bridge" ]]; then
+        # Bridge certificates need SSL server trust
+        trust_flags="u,u,u" 
+        debug "Generating bridge certificate for SSL server authentication"
+    elif [[ "$component" == "server" ]]; then
+        # Server certificates need user trust
+        trust_flags="u,u,u"
+        debug "Generating server certificate"
+    fi
+
+    if certutil -S -d "sql:$nss_dir" -n "$cert_nickname" -s "$subject" -c "$CA_NICKNAME" \
+        -t "$trust_flags" -f "$password_file" -k rsa -g 2048 -z "$entropy_file" >/dev/null 2>&1; then
         success "Certificate generated: $cert_nickname"
+        
+        # For client certificates, set additional trust flags for SSL client auth
+        if [[ "$component" == "client" ]]; then
+            # Ensure the CA is trusted for SSL client certificate validation
+            certutil -d "sql:$nss_dir" -M -n "$CA_NICKNAME" -t "CT,C,C" -f "$password_file" >/dev/null 2>&1 || true
+            debug "Updated CA trust flags for SSL client authentication"
+        fi
     else
         fatal "Failed to generate certificate: $cert_nickname"
     fi
