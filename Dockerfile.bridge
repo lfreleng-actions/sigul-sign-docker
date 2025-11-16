@@ -60,6 +60,9 @@ RUN chmod +x /usr/local/bin/sigul-init.sh /usr/local/bin/validate-nss.sh /usr/lo
 
 # Copy shared PKI files for certificate generation (permissions set later after user creation)
 COPY pki/ /workspace/pki/
+# Copy production-aligned certificate generation script
+COPY pki/generate-production-aligned-certs.sh /usr/local/bin/generate-production-aligned-certs.sh
+RUN chmod +x /usr/local/bin/generate-production-aligned-certs.sh
 
 # Create sigul user and directories with consistent UID 1000 and GID 1000
 # Handle both RPM-created users (x86_64) and manual creation (ARM64)

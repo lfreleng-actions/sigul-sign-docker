@@ -327,85 +327,39 @@ generate_component_certificate() {
 #######################################
 
 setup_bridge_ca() {
-    log "Setting up bridge as Certificate Authority"
+    log "Setting up bridge as Certificate Authority (production-aligned)"
 
     local bridge_nss_dir="$NSS_BASE_DIR/bridge"
-    local password_file="$SECRETS_DIR/nss-password"
-    local ca_export_file="$CA_EXPORT_DIR/bridge-ca.crt"
+    local bridge_fqdn="${BRIDGE_FQDN:-sigul-bridge.example.org}"
 
-    # Create NSS database
-    create_nss_database "bridge"
+    # Check if certificates already exist
+    if [[ -f "$bridge_nss_dir/cert9.db" ]] && \
+       certutil -d "sql:$bridge_nss_dir" -L -n "$CA_NICKNAME" >/dev/null 2>&1 && \
+       certutil -d "sql:$bridge_nss_dir" -L -n "$BRIDGE_CERT_NICKNAME" >/dev/null 2>&1; then
+        log "Bridge certificates already exist, skipping generation"
+        return 0
+    fi
 
-    # Check if CA already exists
-    if certutil -d "sql:$bridge_nss_dir" -L -n "$CA_NICKNAME" >/dev/null 2>&1; then
-        debug "Bridge CA already exists"
+    log "Generating production-aligned certificates for bridge..."
+
+    # Use production-aligned certificate generation script
+    if [[ -x "/usr/local/bin/generate-production-aligned-certs.sh" ]]; then
+        NSS_DB_DIR="$bridge_nss_dir" \
+        NSS_PASSWORD="$(get_nss_password)" \
+        COMPONENT="bridge" \
+        FQDN="$bridge_fqdn" \
+        /usr/local/bin/generate-production-aligned-certs.sh
+    elif [[ -x "/workspace/pki/generate-production-aligned-certs.sh" ]]; then
+        NSS_DB_DIR="$bridge_nss_dir" \
+        NSS_PASSWORD="$(get_nss_password)" \
+        COMPONENT="bridge" \
+        FQDN="$bridge_fqdn" \
+        /workspace/pki/generate-production-aligned-certs.sh
     else
-        log "Creating bridge CA certificate"
-
-        # Generate self-signed CA certificate
-        local ca_subject="CN=Sigul CA,O=Sigul Infrastructure,C=US"
-        # Create entropy file for CA key generation
-        local ca_entropy_file
-        ca_entropy_file=$(mktemp)
-        head -c 1024 /dev/urandom > "$ca_entropy_file"
-
-        if certutil -S -d "sql:$bridge_nss_dir" -n "$CA_NICKNAME" -s "$ca_subject" -t "CT,C,C" -x -f "$password_file" -k rsa -g 2048 -z "$ca_entropy_file" >/dev/null 2>&1; then
-            success "Bridge CA certificate created"
-        else
-            fatal "Failed to create bridge CA certificate"
-        fi
-
-        # Clean up CA entropy file
-        rm -f "$ca_entropy_file"
+        fatal "Production-aligned certificate generation script not found"
     fi
 
-    # Generate bridge service certificate
-    generate_component_certificate "bridge" "$BRIDGE_CERT_NICKNAME"
-
-    # Export CA certificate AND private key for other components
-    # Ensure CA export directory is writable
-    if [[ ! -w "$CA_EXPORT_DIR" ]]; then
-        debug "CA export directory not writable, attempting to fix permissions"
-        mkdir -p "$CA_EXPORT_DIR" 2>/dev/null || true
-        chmod 755 "$CA_EXPORT_DIR" 2>/dev/null || true
-    fi
-
-    # Export CA certificate
-    local temp_ca_file
-    temp_ca_file=$(mktemp)
-    if certutil -L -d "sql:$bridge_nss_dir" -n "$CA_NICKNAME" -a > "$temp_ca_file" 2>/dev/null; then
-        if cp "$temp_ca_file" "$ca_export_file" 2>/dev/null; then
-            success "CA certificate exported for other components"
-        else
-            debug "Direct copy failed, trying alternative approach"
-            if cat "$temp_ca_file" > "$ca_export_file" 2>/dev/null; then
-                success "CA certificate exported for other components (alternative method)"
-            else
-                error "Failed to export CA certificate: $ca_export_file not writable"
-                ls -la "$CA_EXPORT_DIR" || true
-                fatal "CA export failed - check volume permissions"
-            fi
-        fi
-    else
-        fatal "Failed to extract CA certificate from NSS database"
-    fi
-    rm -f "$temp_ca_file" 2>/dev/null || true
-
-    # Export CA private key in PKCS#12 format for server/client import
-    local ca_p12_file="$CA_EXPORT_DIR/bridge-ca.p12"
-    local ca_p12_password_file="$CA_EXPORT_DIR/ca-p12-password"
-
-    # Generate password for PKCS#12 file
-    openssl rand -base64 32 | tr -d "=+/" | cut -c1-25 > "$ca_p12_password_file"
-    chmod 600 "$ca_p12_password_file"
-
-    # Export CA certificate and private key to PKCS#12
-    if pk12util -d "sql:$bridge_nss_dir" -o "$ca_p12_file" -n "$CA_NICKNAME" -k "$password_file" -w "$ca_p12_password_file" >/dev/null 2>&1; then
-        chmod 600 "$ca_p12_file"
-        success "CA private key exported for server/client import"
-    else
-        fatal "Failed to export CA private key"
-    fi
+    success "Bridge certificates generated with FQDN and SAN"
 }
 
 #######################################
@@ -413,37 +367,61 @@ setup_bridge_ca() {
 #######################################
 
 setup_server_certificates() {
-    log "Setting up server certificates"
+    log "Setting up server certificates (production-aligned)"
 
-    local ca_import_file="/etc/pki/sigul/bridge-shared/ca-export/bridge-ca.crt"
+    local server_nss_dir="$NSS_BASE_DIR/server"
+    local server_fqdn="${SERVER_FQDN:-sigul-server.example.org}"
+    local ca_import_dir="$NSS_BASE_DIR/bridge-shared/ca-export"
 
-    # Wait for CA from bridge
+    # Check if certificates already exist
+    if [[ -f "$server_nss_dir/cert9.db" ]] && \
+       certutil -d "sql:$server_nss_dir" -L -n "$CA_NICKNAME" >/dev/null 2>&1 && \
+       certutil -d "sql:$server_nss_dir" -L -n "$SERVER_CERT_NICKNAME" >/dev/null 2>&1; then
+        log "Server certificates already exist, skipping generation"
+        return 0
+    fi
+
+    # Wait for CA from bridge to be available
+    log "Waiting for CA certificate from bridge..."
     local max_attempts=30
     local attempt=1
 
     while [[ $attempt -le $max_attempts ]]; do
-        if [[ -f "$ca_import_file" ]] && [[ -s "$ca_import_file" ]]; then
-            debug "CA import file found"
+        if [[ -d "$ca_import_dir" ]] && [[ -f "$ca_import_dir/ca.crt" ]]; then
+            debug "CA certificate found from bridge"
             break
         fi
-        debug "Waiting for CA from bridge (attempt $attempt/$max_attempts)"
+        if [[ $attempt -eq 1 ]]; then
+            debug "Waiting for bridge CA..."
+        fi
         sleep 2
         ((attempt++))
     done
 
     if [[ $attempt -gt $max_attempts ]]; then
-        fatal "CA certificate not available from bridge"
+        warn "Bridge CA not available, server will generate with fallback method"
     fi
 
-    # Create NSS database
-    create_nss_database "server"
+    log "Generating production-aligned certificates for server..."
 
-    # Import CA certificate and private key
-    import_ca_certificate "server" "$ca_import_file"
-    import_ca_private_key "server"
+    # Use production-aligned certificate generation script
+    if [[ -x "/usr/local/bin/generate-production-aligned-certs.sh" ]]; then
+        NSS_DB_DIR="$server_nss_dir" \
+        NSS_PASSWORD="$(get_nss_password)" \
+        COMPONENT="server" \
+        FQDN="$server_fqdn" \
+        /usr/local/bin/generate-production-aligned-certs.sh
+    elif [[ -x "/workspace/pki/generate-production-aligned-certs.sh" ]]; then
+        NSS_DB_DIR="$server_nss_dir" \
+        NSS_PASSWORD="$(get_nss_password)" \
+        COMPONENT="server" \
+        FQDN="$server_fqdn" \
+        /workspace/pki/generate-production-aligned-certs.sh
+    else
+        fatal "Production-aligned certificate generation script not found"
+    fi
 
-    # Generate server certificate
-    generate_component_certificate "server" "$SERVER_CERT_NICKNAME"
+    success "Server certificates generated with FQDN and SAN"
 
     # Note: Database initialization moved to after configuration generation
 }
@@ -453,38 +431,61 @@ setup_server_certificates() {
 #######################################
 
 setup_client_certificates() {
-    log "Setting up client certificates"
+    log "Setting up client certificates (production-aligned)"
 
-    local ca_import_file="/etc/pki/sigul/bridge-shared/ca-export/bridge-ca.crt"
+    local client_nss_dir="$NSS_BASE_DIR/client"
+    local client_fqdn="${CLIENT_FQDN:-sigul-client.example.org}"
+    local ca_import_dir="$NSS_BASE_DIR/bridge-shared/ca-export"
 
-    # Wait for CA from bridge
+    # Check if certificates already exist
+    if [[ -f "$client_nss_dir/cert9.db" ]] && \
+       certutil -d "sql:$client_nss_dir" -L -n "$CA_NICKNAME" >/dev/null 2>&1 && \
+       certutil -d "sql:$client_nss_dir" -L -n "$CLIENT_CERT_NICKNAME" >/dev/null 2>&1; then
+        log "Client certificates already exist, skipping generation"
+        return 0
+    fi
+
+    # Wait for CA from bridge to be available
+    log "Waiting for CA certificate from bridge..."
     local max_attempts=30
     local attempt=1
 
     while [[ $attempt -le $max_attempts ]]; do
-        if [[ -f "$ca_import_file" ]] && [[ -s "$ca_import_file" ]]; then
-            debug "CA import file found"
+        if [[ -d "$ca_import_dir" ]] && [[ -f "$ca_import_dir/ca.crt" ]]; then
+            debug "CA certificate found from bridge"
             break
         fi
-
-        debug "Waiting for CA from bridge (attempt $attempt/$max_attempts)"
+        if [[ $attempt -eq 1 ]]; then
+            debug "Waiting for bridge CA..."
+        fi
         sleep 2
         ((attempt++))
     done
 
-    if [[ ! -f "$ca_import_file" ]] || [[ ! -s "$ca_import_file" ]]; then
-        fatal "CA certificate not available from bridge"
+    if [[ $attempt -gt $max_attempts ]]; then
+        warn "Bridge CA not available, client will generate with fallback method"
     fi
 
-    # Create NSS database
-    create_nss_database "client"
+    log "Generating production-aligned certificates for client..."
 
-    # Import CA certificate and private key
-    import_ca_certificate "client" "$ca_import_file"
-    import_ca_private_key "client"
+    # Use production-aligned certificate generation script
+    if [[ -x "/usr/local/bin/generate-production-aligned-certs.sh" ]]; then
+        NSS_DB_DIR="$client_nss_dir" \
+        NSS_PASSWORD="$(get_nss_password)" \
+        COMPONENT="client" \
+        FQDN="$client_fqdn" \
+        /usr/local/bin/generate-production-aligned-certs.sh
+    elif [[ -x "/workspace/pki/generate-production-aligned-certs.sh" ]]; then
+        NSS_DB_DIR="$client_nss_dir" \
+        NSS_PASSWORD="$(get_nss_password)" \
+        COMPONENT="client" \
+        FQDN="$client_fqdn" \
+        /workspace/pki/generate-production-aligned-certs.sh
+    else
+        fatal "Production-aligned certificate generation script not found"
+    fi
 
-    # Generate client certificate
-    generate_component_certificate "client" "$CLIENT_CERT_NICKNAME"
+    success "Client certificates generated with FQDN and SAN"
 }
 
 #######################################

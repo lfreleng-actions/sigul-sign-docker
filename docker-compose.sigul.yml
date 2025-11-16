@@ -41,6 +41,8 @@ services:
       DEBUG: ${DEBUG:-false}
       # Role for unified initialization
       SIGUL_ROLE: server
+      # FQDN for certificate generation
+      SERVER_FQDN: ${SERVER_FQDN:-sigul-server.example.org}
     volumes:
       # FHS-compliant volume mounts
       - sigul_server_config:/etc/sigul:rw
@@ -78,6 +80,8 @@ services:
       DEBUG: ${DEBUG:-false}
       # Role for unified initialization
       SIGUL_ROLE: bridge
+      # FQDN for certificate generation
+      BRIDGE_FQDN: ${BRIDGE_FQDN:-sigul-bridge.example.org}
     volumes:
       # FHS-compliant volume mounts
       - sigul_bridge_config:/etc/sigul:rw
@@ -119,6 +123,8 @@ services:
       NSS_PASSWORD: ${NSS_PASSWORD:-auto_generated_ephemeral}
       # Debug mode
       DEBUG: ${DEBUG:-false}
+      # FQDN for certificate generation
+      CLIENT_FQDN: ${CLIENT_FQDN:-sigul-client.example.org}
     volumes:
       # Test workspace for file operations
       - ./test-workspace:/workspace:rw
