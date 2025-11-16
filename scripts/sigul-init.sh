@@ -544,87 +544,102 @@ generate_configuration() {
     local role="$1"
     local config_file="$CONFIG_DIR/$role.conf"
 
-    log "Generating NSS-only configuration for $role"
+    log "Generating production-aligned configuration for $role"
 
     # Configuration variables
-    local nss_password_file="$SECRETS_DIR/nss-password"
-    local bridge_hostname="${SIGUL_BRIDGE_HOSTNAME:-sigul-bridge}"
-    local bridge_client_port="${SIGUL_BRIDGE_CLIENT_PORT:-44334}"
-    local bridge_server_port="${SIGUL_BRIDGE_SERVER_PORT:-44333}"
-    local admin_user="${SIGUL_ADMIN_USER:-admin}"
+    local nss_password
+    nss_password=$(get_nss_password)
+    local bridge_fqdn="${BRIDGE_FQDN:-sigul-bridge.example.org}"
+    local server_fqdn="${SERVER_FQDN:-sigul-server.example.org}"
+    local client_port="${CLIENT_PORT:-44334}"
+    local server_port="${SERVER_PORT:-44333}"
+    local bridge_port="${BRIDGE_PORT:-44333}"
 
-    # Generate role-specific configuration
+    # Generate role-specific configuration (production-aligned)
     case "$role" in
         "bridge")
             cat > "$config_file" << EOF
-[nss]
-nss-dir = $NSS_BASE_DIR/bridge
-nss-password = $(cat "$nss_password_file")
+# Sigul Bridge Configuration
+# Production-aligned configuration
 
 [bridge]
-bridge-cert-nickname = $BRIDGE_CERT_NICKNAME
-client-listen-port = $bridge_client_port
-server-listen-port = $bridge_server_port
-max-file-payload-size = 67108864
-required-fas-group =
+bridge-cert-nickname: ${bridge_fqdn}
+client-listen-port: ${client_port}
+server-listen-port: ${server_port}
 
-[bridge-server]
-nss-dir = sql:$NSS_BASE_DIR/bridge
-nss-password-file = $nss_password_file
-ca-cert-nickname = $CA_NICKNAME
-bridge-cert-nickname = $BRIDGE_CERT_NICKNAME
-server-hostname = sigul-server
-server-port = $bridge_server_port
-require-tls = true
+[koji]
 
 [daemon]
-unix-user =
-unix-group =
+unix-user: sigul
+unix-group: sigul
+
+[nss]
+nss-dir: ${NSS_BASE_DIR}
+nss-password: ${nss_password}
+nss-min-tls: tls1.2
 EOF
             ;;
         "server")
             cat > "$config_file" << EOF
-[nss]
-nss-dir = $NSS_BASE_DIR/server
-nss-password = $(cat "$nss_password_file")
+# Sigul Server Configuration
+# Production-aligned configuration
 
 [server]
-database-path = $DB_DIR/server.sqlite
-nss-dir = sql:$NSS_BASE_DIR/server
-nss-password-file = $nss_password_file
-ca-cert-nickname = $CA_NICKNAME
-server-cert-nickname = $SERVER_CERT_NICKNAME
-bridge-hostname = $bridge_hostname
-bridge-port = $bridge_server_port
-require-tls = true
-gnupg-home = $GNUPG_DIR
-log-level = INFO
-log-file = $LOGS_DIR/server.log
+bridge-hostname: ${bridge_fqdn}
+bridge-port: ${bridge_port}
+max-file-payload-size: 1073741824
+max-memory-payload-size: 1048576
+max-rpms-payload-size: 10737418240
+server-cert-nickname: ${server_fqdn}
+signing-timeout: 60
+
+[database]
+database-path: ${DATA_BASE_DIR}/server/sigul.db
+
+[gnupg]
+gnupg-home: ${DATA_BASE_DIR}/server/gnupg
+gnupg-key-type: RSA
+gnupg-key-length: 2048
+gnupg-key-usage: sign
+passphrase-length: 64
+
+[daemon]
+unix-user: sigul
+unix-group: sigul
+
+[nss]
+nss-dir: ${NSS_BASE_DIR}
+nss-password: ${nss_password}
+nss-min-tls: tls1.2
 EOF
             ;;
         "client")
+            local admin_user="${SIGUL_ADMIN_USER:-admin}"
             cat > "$config_file" << EOF
-[nss]
-nss-dir = $NSS_BASE_DIR/client
-nss-password = $(cat "$nss_password_file")
+# Sigul Client Configuration
+# Production-aligned configuration
 
 [client]
-nss-dir = sql:$NSS_BASE_DIR/client
-nss-password-file = $nss_password_file
-ca-cert-nickname = $CA_NICKNAME
-client-cert-nickname = $CLIENT_CERT_NICKNAME
-bridge-hostname = $bridge_hostname
-bridge-port = $bridge_client_port
-server-hostname = sigul-server
-require-tls = true
-user-name = $admin_user
-log-level = INFO
-log-file = $LOGS_DIR/client.log
+bridge-hostname: ${bridge_fqdn}
+bridge-port: ${client_port}
+user-name: ${admin_user}
+
+[daemon]
+unix-user: sigul
+unix-group: sigul
+
+[nss]
+nss-dir: ${NSS_BASE_DIR}
+nss-password: ${nss_password}
+nss-min-tls: tls1.2
 EOF
             ;;
     esac
 
-    success "Configuration generated: $config_file"
+    # Set secure permissions
+    chmod 600 "$config_file"
+
+    success "Production-aligned configuration generated: $config_file"
 }
 
 #######################################

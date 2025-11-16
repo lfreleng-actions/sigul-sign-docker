@@ -36,7 +36,7 @@ This alignment plan provides a phased approach to bring the containerized Sigul 
 - ✅ **Modernization Supported**: Python 3, modern NSS (cert9.db), GPG 2.x
 - ✅ **Configuration Alignment Required**: FHS paths, config structure, PKI patterns
 - ❌ **No Downgrades**: No reverting to Python 2, old NSS formats, or deprecated protocols
-- ❌ **No Legacy Protocols**: No SSLv2/SSLv3, maintaining TLS 1.2+ only
+- ❌ **No Legacy Protocols**: No SSLv2/SSLv3, maintaining TLS 1.2+ (with TLS 1.3 support)
 
 **Critical Gaps Identified:**
 
@@ -96,7 +96,7 @@ This alignment plan provides a phased approach to bring the containerized Sigul 
    - ✅ Current package versions
 
 2. **Security Protocols**: Keep modern security
-   - ✅ TLS 1.2+ only (no SSLv2/SSLv3)
+   - ✅ TLS 1.2+ with TLS 1.3 support (no SSLv2/SSLv3)
    - ✅ Strong key sizes (2048+ bit RSA)
    - ✅ Modern cipher suites
 
@@ -767,8 +767,8 @@ nss-dir: /etc/pki/sigul
 nss-password: ${NSS_PASSWORD}
 
 # TLS version constraints (modern TLS only)
+# No upper limit - supports TLS 1.3
 nss-min-tls: tls1.2
-nss-max-tls: tls1.3
 ```
 
 ### 3.2 Create Server Configuration Template
@@ -824,8 +824,8 @@ nss-dir: /etc/pki/sigul
 nss-password: ${NSS_PASSWORD}
 
 # TLS version constraints (modern TLS only)
+# No upper limit - supports TLS 1.3
 nss-min-tls: tls1.2
-nss-max-tls: tls1.3
 ```
 
 ### 3.3 Create Configuration Generation Script
