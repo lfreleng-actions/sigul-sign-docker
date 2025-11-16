@@ -47,16 +47,18 @@ RUN chmod +x /tmp/install-sigul.sh && \
     /tmp/install-sigul.sh --verify bridge && \
     rm /tmp/install-sigul.sh
 
-# NSS-only initialization
+# Production-aligned initialization
 
-# Copy NSS-only initialization script and validation tools
-COPY scripts/sigul-init.sh /usr/local/bin/sigul-init.sh
+# Copy production-aligned entrypoint script
+COPY scripts/entrypoint-bridge.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
+# Copy validation tools (used during one-time setup, not startup)
 COPY scripts/validate-nss.sh /usr/local/bin/validate-nss.sh
 COPY scripts/lib/health.sh /usr/local/bin/health.sh
-COPY scripts/sigul-config-nss-only.template /usr/local/bin/sigul-config-nss-only.template
-RUN chmod +x /usr/local/bin/sigul-init.sh /usr/local/bin/validate-nss.sh /usr/local/bin/health.sh
+RUN chmod +x /usr/local/bin/validate-nss.sh /usr/local/bin/health.sh
 
-# NSS-only certificate management
+# Production-aligned certificate management
 
 # Copy shared PKI files for certificate generation (permissions set later after user creation)
 COPY pki/ /workspace/pki/
@@ -100,14 +102,11 @@ RUN if getent passwd sigul >/dev/null; then \
 WORKDIR /var/lib/sigul/bridge
 
 # Switch to sigul user (directories already created with proper ownership above)
-
 USER sigul
 
-# Default command - initialize and start service (NSS-only by default)
-CMD ["/usr/local/bin/sigul-init.sh", "--role", "bridge", "--start-service"]
+# Set entrypoint - production-aligned direct invocation
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 
-# Health check - NSS-based certificate validation with process check
-HEALTHCHECK --interval=45s --timeout=15s --start-period=120s --retries=5 \
-    CMD certutil -d sql:/etc/pki/sigul/bridge -L -n sigul-ca >/dev/null 2>&1 && \
-        certutil -d sql:/etc/pki/sigul/bridge -L -n sigul-bridge-cert >/dev/null 2>&1 && \
-        pgrep -f "sigul_bridge" >/dev/null 2>&1 || exit 1
+# Health check - verify bridge is listening on port 44333
+HEALTHCHECK --interval=10s --timeout=5s --start-period=30s --retries=5 \
+    CMD nc -z localhost 44333 || exit 1

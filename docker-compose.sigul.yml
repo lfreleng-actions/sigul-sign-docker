@@ -29,7 +29,7 @@ services:
       context: .
       dockerfile: Dockerfile.server
     container_name: sigul-server
-    hostname: sigul-server
+    hostname: sigul-server.example.org
     user: "1000:1000"
     environment:
       # NSS Database password for secure operation
@@ -53,14 +53,15 @@ services:
       # Server reads CA from bridge NSS volume
       - sigul_bridge_nss:/etc/pki/sigul/bridge-shared:ro
     networks:
-      - sigul-network
+      sigul-network:
+        ipv4_address: 172.20.0.3
+        aliases:
+          - sigul-server.example.org
+          - sigul-server
     depends_on:
       sigul-bridge:
         condition: service_healthy
-    restart: unless-stopped
-    init: true
-    # Initialize server using unified sigul-init.sh with debug logging
-    command: ["/usr/local/bin/sigul-init.sh", "--role", "server", "--debug", "--start-service"]
+
 
   # Sigul Bridge Container
   sigul-bridge:
@@ -68,7 +69,7 @@ services:
       context: .
       dockerfile: Dockerfile.bridge
     container_name: sigul-bridge
-    hostname: sigul-bridge
+    hostname: sigul-bridge.example.org
     user: "1000:1000"
     environment:
       # Bridge port configuration
@@ -89,21 +90,22 @@ services:
       - sigul_bridge_data:/var/lib/sigul/bridge:rw
       - sigul_bridge_logs:/var/log/sigul/bridge:rw
     ports:
+      - "44333:44333"
       - "44334:44334"
     healthcheck:
-      test: ["CMD-SHELL", "certutil -d sql:/etc/pki/sigul/bridge -L -n sigul-ca >/dev/null 2>&1 && certutil -d sql:/etc/pki/sigul/bridge -L -n sigul-bridge-cert >/dev/null 2>&1"]
-      interval: 30s
-      timeout: 10s
+      test: ["CMD", "nc", "-z", "localhost", "44333"]
+      interval: 10s
+      timeout: 5s
       retries: 5
-      start_period: 60s
+      start_period: 30s
     networks:
-      - sigul-network
-    restart: unless-stopped
-    init: true
+      sigul-network:
+        ipv4_address: 172.20.0.2
+        aliases:
+          - sigul-bridge.example.org
+          - sigul-bridge
     security_opt:
       - no-new-privileges:true
-    # Initialize bridge using unified sigul-init.sh with debug logging
-    command: ["/usr/local/bin/sigul-init.sh", "--role", "bridge", "--debug", "--start-service"]
 
   # Sigul Client Test Environment
   sigul-client-test:
@@ -142,9 +144,6 @@ services:
         condition: service_healthy
     profiles:
       - testing
-    restart: "no"
-    # Initialize client using unified sigul-init.sh
-    command: ["/usr/local/bin/sigul-init.sh", "--role", "client"]
 
   # Bridge Monitor Sidecar (Passive Monitor v2)
   bridge-monitor:
