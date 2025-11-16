@@ -9,6 +9,49 @@ SPDX-FileCopyrightText: 2025 The Linux Foundation
 
 This guide provides step-by-step instructions for deploying the NSS-based Sigul infrastructure. The implementation uses a bridge-centric PKI architecture where the bridge component acts as the Certificate Authority, replacing the previous OpenSSL-based approach.
 
+## Production-Aligned Deployment
+
+For deployment aligned with production configuration patterns (AWS-based deployments), see:
+
+- **[DEPLOYMENT_PRODUCTION_ALIGNED.md](DEPLOYMENT_PRODUCTION_ALIGNED.md)** - Complete production deployment guide
+  - FHS-compliant directory structure
+  - FQDN-based certificates with SANs
+  - Modern cryptographic formats (cert9.db, TLS 1.2+)
+  - Production-verified configuration patterns
+  - Comprehensive troubleshooting and maintenance procedures
+
+- **[OPERATIONS_GUIDE.md](OPERATIONS_GUIDE.md)** - Day-to-day operations
+  - Daily operations and monitoring
+  - Health checks and diagnostics
+  - Common tasks and maintenance
+  - Incident response procedures
+  - Performance monitoring
+
+- **[VALIDATION_CHECKLIST.md](VALIDATION_CHECKLIST.md)** - Validation checklist
+  - Pre-deployment validation
+  - Infrastructure validation
+  - Certificate validation
+  - Network and service validation
+  - Production readiness checklist
+
+- **[NETWORK_ARCHITECTURE.md](NETWORK_ARCHITECTURE.md)** - Network architecture reference
+  - Correct connection flow (Server CONNECTS TO bridge)
+  - Configuration evidence
+  - Network verification commands
+  - Troubleshooting guide
+
+- **[ALIGNMENT_PLAN.md](ALIGNMENT_PLAN.md)** - Complete alignment plan
+  - All 8 phases of production alignment
+  - Phase completion documents (PHASE1-7_COMPLETE.md)
+  - Detailed implementation steps
+
+The production-aligned deployment includes:
+- Direct service invocation (no wrapper scripts)
+- Static IP assignment and FQDN-based hostnames
+- Persistent volume strategy with backup/restore scripts
+- Automated validation scripts for all phases
+- Comprehensive integration and performance testing
+
 ## Prerequisites
 
 ### System Requirements
