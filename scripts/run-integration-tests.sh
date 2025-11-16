@@ -380,11 +380,11 @@ import_bridge_cert_to_client() {
     # Import to client with proper trust flags for SSL server authentication
     docker cp /tmp/current-bridge-cert.pem "$client_container":/tmp/
 
-    if printf '%s' "$(docker exec "$client_container" cat /var/sigul/secrets/nss-password)" | docker exec -i "$client_container" certutil -A -d /var/sigul/nss/client \
+    if docker exec "$client_container" certutil -A -d /var/sigul/nss/client \
         -n sigul-bridge-cert \
         -t "P,," \
         -a -i /tmp/current-bridge-cert.pem \
-        -f /dev/stdin 2>/dev/null; then
+        -f /var/sigul/secrets/nss-password 2>/dev/null; then
 
         success "Bridge certificate imported to client NSS database"
 
@@ -419,7 +419,18 @@ run_sigul_client_cmd() {
     local client_container_name="sigul-client-integration"
 
     # Show the exact command being executed for debugging
+    # Validate password format for batch commands
+    validate_batch_password_format "${cmd[*]}" || return 1
+    # Validate command format
+    validate_sigul_batch_command "${cmd[@]}" || return 1
     log "🔧 EXECUTING: docker exec $client_container_name ${cmd[*]}"
+    # Show actual command with proper escaping for debugging
+    if [[ "$VERBOSE_MODE" == "true" ]]; then
+        verbose "DEBUG: Actual command execution with preserved escaping:"
+        printf "  docker exec %s" "$client_container_name"
+        printf " %q" "${cmd[@]}"
+        printf "\n"
+    fi
 
     # Check if container is still running
     if ! docker ps --filter "name=$client_container_name" --filter "status=running" | grep -q "$client_container_name"; then
@@ -999,31 +1010,31 @@ run_integration_tests() {
     # Test 3: Actual SSL handshake verification
     verbose "Testing actual SSL handshake (Client-Bridge)..."
     local ssl_handshake_success=false
-    
+
     # First, verify NSS database and certificates are accessible
     if docker exec sigul-client-integration certutil -L -d /var/sigul/nss/client >/dev/null 2>&1; then
         verbose "✓ Client NSS database is accessible"
-        
+
         # Check if required certificates exist
         if docker exec sigul-client-integration certutil -L -d /var/sigul/nss/client -n sigul-bridge-cert >/dev/null 2>&1; then
             verbose "✓ Bridge certificate found in client NSS database"
-            
+
             # Test actual SSL handshake using tstclnt
             if timeout 15 docker exec sigul-client-integration \
                 tstclnt -h sigul-bridge -p 44334 \
                 -d /var/sigul/nss/client \
                 -w /var/sigul/secrets/nss-password \
                 -v >/dev/null 2>&1; then
-                
+
                 verbose "✓ SSL handshake successful - certificates and NSS are working"
                 ssl_handshake_success=true
             else
                 warn "⚠ SSL handshake failed with tstclnt - trying OpenSSL fallback"
-                
+
                 # Fallback: Test basic SSL connectivity with OpenSSL
                 if echo "QUIT" | timeout 10 docker exec -i sigul-client-integration \
                     openssl s_client -connect sigul-bridge:44334 -quiet >/dev/null 2>&1; then
-                    
+
                     verbose "✓ Basic SSL connection works (OpenSSL), but NSS handshake failed"
                     warn "This may indicate NSS-specific certificate or trust issues"
                 else

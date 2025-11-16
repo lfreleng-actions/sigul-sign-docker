@@ -1,0 +1,1 @@
+=== Last 50 lines of /var/log/sigul-bridge-aws-us-west-2-dent-sigul-bridge-1/sigul_server.log ===

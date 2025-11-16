@@ -1,0 +1,13 @@
+=== Logrotate Configuration ===
+# This file is managed by Puppet.
+# Origin: modules/sigul/files/sigul.logrotate
+
+/var/log/sigul*.log /var/log/sigul*/*.log {
+    missingok
+    notifempty
+    copytruncate
+}
+/var/log/sigul*.log {
+	missingok
+	notifempty
+}

@@ -1,0 +1,3 @@
+local     sigul-sign-docker_sigul_bridge_data
+local     sigul-sign-docker_sigul_client_data
+local     sigul-sign-docker_sigul_server_data

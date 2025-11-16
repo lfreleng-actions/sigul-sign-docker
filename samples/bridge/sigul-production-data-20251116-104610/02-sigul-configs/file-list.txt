@@ -1,0 +1,6 @@
+=== Configuration Files ===
+total 20K
+drwxr-xr-x.  2 root  root    44 May 28  2022 .
+drwxr-xr-x. 98 root  root  8.0K Oct 20 18:08 ..
+-rw-------.  1 sigul sigul  318 Dec  1  2021 bridge.conf
+-rw-r--r--.  1 root  root  1.3K Mar  2  2017 client.conf

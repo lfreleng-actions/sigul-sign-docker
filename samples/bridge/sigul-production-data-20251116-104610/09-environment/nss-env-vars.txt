@@ -1,0 +1,4 @@
+=== NSS Environment Variables ===
+No NSS variables
+
+No NSS variables for sigul user

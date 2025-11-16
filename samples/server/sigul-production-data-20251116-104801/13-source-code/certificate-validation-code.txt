@@ -1,0 +1,202 @@
+=== Certificate Validation Logic ===
+/usr/share/sigul/client.py-    default_config_file = 'client.conf'
+/usr/share/sigul/client.py-
+/usr/share/sigul/client.py-    def _add_defaults(self, defaults):
+/usr/share/sigul/client.py-        super(ClientConfiguration, self)._add_defaults(defaults)
+/usr/share/sigul/client.py-        defaults.update({'bridge-port': 44334,
+/usr/share/sigul/client.py:                         'client-cert-nickname': 'sigul-client-cert',
+/usr/share/sigul/client.py-                         'user-name': getpass.getuser(),
+/usr/share/sigul/client.py-                         'passphrase-length': 128},)
+/usr/share/sigul/client.py-
+/usr/share/sigul/client.py-    def _add_sections(self, sections):
+/usr/share/sigul/client.py-        super(ClientConfiguration, self)._add_sections(sections)
+/usr/share/sigul/client.py-        sections.add('client')
+/usr/share/sigul/client.py-
+/usr/share/sigul/client.py-    def _read_configuration(self, parser):
+/usr/share/sigul/client.py-        super(ClientConfiguration, self)._read_configuration(parser)
+/usr/share/sigul/client.py-        self.bridge_hostname = parser.get('client', 'bridge-hostname')
+/usr/share/sigul/client.py-        self.bridge_port = parser.getint('client', 'bridge-port')
+/usr/share/sigul/client.py:        self.client_cert_nickname = parser.get('client', 'client-cert-nickname')
+/usr/share/sigul/client.py-        self.server_hostname = parser.get('client', 'server-hostname')
+/usr/share/sigul/client.py-        self.user_name = parser.get('client', 'user-name')
+/usr/share/sigul/client.py-        self.passphrase_length = parser.get('client', 'passphrase-length')
+/usr/share/sigul/client.py-        self.batch_mode = False
+/usr/share/sigul/client.py-
+/usr/share/sigul/client.py-def safe_string(s):
+/usr/share/sigul/client.py-    '''Raise ClientError if s is not a safe string, otherwise return s.'''
+/usr/share/sigul/client.py-    if not utils.string_is_safe(s):
+/usr/share/sigul/client.py-        raise ClientError('\'%s\' (%s) contains prohibited characters' %
+/usr/share/sigul/client.py-                          (s, repr(s)))
+--
+/usr/share/sigul/client.py-        '''Connect and send outer_fields if op, outer_fields is not None.'''
+/usr/share/sigul/client.py-        self.__client = double_tls.DoubleTLSClient(self.config,
+/usr/share/sigul/client.py-                                                   self.config.bridge_hostname,
+/usr/share/sigul/client.py-                                                   self.config.bridge_port,
+/usr/share/sigul/client.py-                                                   self.config.
+/usr/share/sigul/client.py:                                                   client_cert_nickname)
+/usr/share/sigul/client.py-        try:
+/usr/share/sigul/client.py-            utils.nss_init(self.config)
+/usr/share/sigul/client.py-        except utils.NSSInitError, e:
+/usr/share/sigul/client.py-            raise ClientError(str(e))
+/usr/share/sigul/client.py-        self.__request_header_writer = \
+/usr/share/sigul/client.py-            utils.SHA512Writer(self.__client.outer_write)
+/usr/share/sigul/client.py-        self.__request_payload_writer = \
+/usr/share/sigul/client.py-            utils.SHA512Writer(self.__client.outer_write)
+/usr/share/sigul/client.py-        buf = utils.u32_pack(utils.protocol_version)
+/usr/share/sigul/client.py-        self.__request_header_writer.write(buf)
+--
+/usr/share/sigul/client.py-        self.__reply_payload_reader = \
+/usr/share/sigul/client.py-            utils.SHA512HMACReader(self.__client.outer_read, nss_key)
+/usr/share/sigul/client.py-
+/usr/share/sigul/client.py-        try:
+/usr/share/sigul/client.py-            self.__client.inner_open_client(self.config.server_hostname,
+/usr/share/sigul/client.py:                                            self.config.client_cert_nickname)
+/usr/share/sigul/client.py-        except double_tls.InnerCertificateNotFound, e:
+/usr/share/sigul/client.py-            raise ClientError(str(e))
+/usr/share/sigul/client.py-        try:
+/usr/share/sigul/client.py-            self.__client.inner_write(utils.format_fields(fields))
+/usr/share/sigul/client.py-        finally:
+/usr/share/sigul/client.py-            self.__client.inner_close()
+/usr/share/sigul/client.py-
+/usr/share/sigul/client.py-    def read_response(self, expected_errors = (), no_payload=False):
+/usr/share/sigul/client.py-        '''Read server's response.
+/usr/share/sigul/client.py-
+--
+/usr/share/sigul/client.py-                                  % arg)
+/usr/share/sigul/client.py-            size = utils.file_size_in_blocks(rpm_file)
+/usr/share/sigul/client.py-        else:
+/usr/share/sigul/client.py-            # Don't import koji before initializing ClientsConnection!  The rpm
+/usr/share/sigul/client.py-            # Python module calls NSS_NoDB_Init() during its initialization,
+/usr/share/sigul/client.py:            # which breaks our attempts to initialize nss with our certificate
+/usr/share/sigul/client.py-            # database.
+/usr/share/sigul/client.py-            import koji
+/usr/share/sigul/client.py-
+/usr/share/sigul/client.py-            try:
+/usr/share/sigul/client.py-                if self.__koji_session is None:
+/usr/share/sigul/client.py-                    kc = utils.koji_read_config(self.__config,
+/usr/share/sigul/client.py-                                                self.__koji_instance)
+/usr/share/sigul/client.py-                    self.__koji_session = utils.koji_connect(kc,
+/usr/share/sigul/client.py-                                                             authenticate=False)
+/usr/share/sigul/client.py-                rpm = self.__koji_session.getRPM(arg)
+--
+/usr/share/sigul/double_tls.py-class ChildUnrecoverableError(Exception):
+/usr/share/sigul/double_tls.py-    '''We don't know how to recover from an error in the child.'''
+/usr/share/sigul/double_tls.py-    pass
+/usr/share/sigul/double_tls.py-
+/usr/share/sigul/double_tls.py-class InnerCertificateNotFound(Exception):
+/usr/share/sigul/double_tls.py:    '''inner_open_* certificate was not found.'''
+/usr/share/sigul/double_tls.py-    pass
+/usr/share/sigul/double_tls.py-
+/usr/share/sigul/double_tls.py-def _nspr_poll(descs, timeout):
+/usr/share/sigul/double_tls.py-    '''Poll for descs.
+/usr/share/sigul/double_tls.py-
+/usr/share/sigul/double_tls.py-    descs is a dictionary of {nss.io.Socket: flags}.  On return, flags are
+/usr/share/sigul/double_tls.py-    updated with poll results.
+/usr/share/sigul/double_tls.py-
+/usr/share/sigul/double_tls.py-    '''
+/usr/share/sigul/double_tls.py-    # FIXME: implement this in nss-python instead?
+--
+/usr/share/sigul/double_tls.py-    '''
+/usr/share/sigul/double_tls.py-
+/usr/share/sigul/double_tls.py-    __connection_refused_exit_code = 43 # universe and everything... +1!
+/usr/share/sigul/double_tls.py-    __unrecoverable_error_exit_code = 44
+/usr/share/sigul/double_tls.py-
+/usr/share/sigul/double_tls.py:    def __init__(self, config, hostname, port, cert_nickname):
+/usr/share/sigul/double_tls.py-        '''Prepare for implementing the nested TLS session.
+/usr/share/sigul/double_tls.py-
+/usr/share/sigul/double_tls.py-        Must be called before initializing NSS.
+/usr/share/sigul/double_tls.py-
+/usr/share/sigul/double_tls.py-        '''
+/usr/share/sigul/double_tls.py-        self.__config = config
+/usr/share/sigul/double_tls.py-        self.__hostname = hostname
+/usr/share/sigul/double_tls.py-        self.__port = port
+/usr/share/sigul/double_tls.py:        self.__cert_nickname = cert_nickname
+/usr/share/sigul/double_tls.py-        self.peercert = None
+/usr/share/sigul/double_tls.py-        # The connection between child and parent is called a "pipe" although
+/usr/share/sigul/double_tls.py-        # it is a pair of sockets.  "socket" is the network socket used for
+/usr/share/sigul/double_tls.py-        # the outer TLS session.
+/usr/share/sigul/double_tls.py-        (parent_inner_pipe, child_inner_pipe) = _tcp_socketpair()
+/usr/share/sigul/double_tls.py-        (parent_outer_pipe, child_outer_pipe) = _tcp_socketpair()
+/usr/share/sigul/double_tls.py-        self.__child_pid = os.fork()
+/usr/share/sigul/double_tls.py-        if self.__child_pid == 0:
+/usr/share/sigul/double_tls.py-            parent_inner_pipe.close()
+/usr/share/sigul/double_tls.py-            parent_outer_pipe.close()
+--
+/usr/share/sigul/double_tls.py-        writes.
+/usr/share/sigul/double_tls.py-
+/usr/share/sigul/double_tls.py-        '''
+/usr/share/sigul/double_tls.py-        self.__inner.send(data)
+/usr/share/sigul/double_tls.py-
+/usr/share/sigul/double_tls.py:    def inner_open_client(self, hostname, cert_nickname):
+/usr/share/sigul/double_tls.py-        '''Open the inner TLS session as a client.
+/usr/share/sigul/double_tls.py-
+/usr/share/sigul/double_tls.py-        Raise InnerCertificateNotFound.
+/usr/share/sigul/double_tls.py-
+/usr/share/sigul/double_tls.py-        '''
+/usr/share/sigul/double_tls.py-        fd = os.dup(self.__inner_pipe.fileno())
+/usr/share/sigul/double_tls.py-        try:
+/usr/share/sigul/double_tls.py-            self.__inner = nss.ssl.SSLSocket.import_tcp_socket(fd)
+/usr/share/sigul/double_tls.py-        except:
+/usr/share/sigul/double_tls.py-            os.close(fd)
+/usr/share/sigul/double_tls.py-            raise
+/usr/share/sigul/double_tls.py-        try:
+/usr/share/sigul/double_tls.py-            self.__inner.set_ssl_option(nss.ssl.SSL_REQUEST_CERTIFICATE, True)
+/usr/share/sigul/double_tls.py-            self.__inner.set_ssl_option(nss.ssl.SSL_REQUIRE_CERTIFICATE, True)
+/usr/share/sigul/double_tls.py-            try:
+/usr/share/sigul/double_tls.py:                cert = nss.nss.find_cert_from_nickname(cert_nickname)
+/usr/share/sigul/double_tls.py-            except nss.error.NSPRError, e:
+/usr/share/sigul/double_tls.py-                if e.errno == nss.error.SEC_ERROR_BAD_DATABASE:
+/usr/share/sigul/double_tls.py-                    raise InnerCertificateNotFound('Certificate \'%s\' is not '
+/usr/share/sigul/double_tls.py:                                                   'available' % cert_nickname)
+/usr/share/sigul/double_tls.py-                raise
+/usr/share/sigul/double_tls.py-            self.__inner.set_client_auth_data_callback \
+/usr/share/sigul/double_tls.py-                (utils.nss_client_auth_callback_single, cert)
+/usr/share/sigul/double_tls.py-            self.__inner.set_hostname(hostname)
+/usr/share/sigul/double_tls.py-            self.__inner.reset_handshake(False)
+/usr/share/sigul/double_tls.py-            self.__inner.force_handshake()
+/usr/share/sigul/double_tls.py-        except:
+/usr/share/sigul/double_tls.py-            self.__inner.close()
+/usr/share/sigul/double_tls.py-            self.__inner = None
+/usr/share/sigul/double_tls.py-            raise
+/usr/share/sigul/double_tls.py-
+/usr/share/sigul/double_tls.py:    def inner_open_server(self, cert_nickname):
+/usr/share/sigul/double_tls.py-        '''Open the inner TLS session as a server.
+/usr/share/sigul/double_tls.py-
+/usr/share/sigul/double_tls.py-        Raise InnerCertificateNotFound.
+/usr/share/sigul/double_tls.py-
+/usr/share/sigul/double_tls.py-        '''
+/usr/share/sigul/double_tls.py-        fd = os.dup(self.__inner_pipe.fileno())
+/usr/share/sigul/double_tls.py-        try:
+/usr/share/sigul/double_tls.py-            self.__inner = nss.ssl.SSLSocket.import_tcp_socket(fd)
+/usr/share/sigul/double_tls.py-        except:
+/usr/share/sigul/double_tls.py-            os.close(fd)
+/usr/share/sigul/double_tls.py-            raise
+/usr/share/sigul/double_tls.py-        try:
+/usr/share/sigul/double_tls.py-            self.__inner.set_ssl_option(nss.ssl.SSL_REQUEST_CERTIFICATE, True)
+/usr/share/sigul/double_tls.py-            self.__inner.set_ssl_option(nss.ssl.SSL_REQUIRE_CERTIFICATE, True)
+/usr/share/sigul/double_tls.py-            try:
+/usr/share/sigul/double_tls.py:                cert = nss.nss.find_cert_from_nickname(cert_nickname)
+/usr/share/sigul/double_tls.py-            except nss.error.NSPRError, e:
+/usr/share/sigul/double_tls.py-                if e.errno == nss.error.SEC_ERROR_BAD_DATABASE:
+/usr/share/sigul/double_tls.py-                    raise InnerCertificateNotFound('Certificate \'%s\' is not '
+/usr/share/sigul/double_tls.py:                                                   'available' % cert_nickname)
+/usr/share/sigul/double_tls.py-                raise
+/usr/share/sigul/double_tls.py-            self.__inner.config_secure_server(cert, nss.nss.
+/usr/share/sigul/double_tls.py-                                              find_key_by_any_cert(cert),
+/usr/share/sigul/double_tls.py-                                              cert.find_kea_type())
+/usr/share/sigul/double_tls.py-            self.__inner.reset_handshake(True)
+/usr/share/sigul/double_tls.py-            self.__inner.force_handshake()
+/usr/share/sigul/double_tls.py:            self.peercert = self.__inner.get_peer_certificate()
+/usr/share/sigul/double_tls.py-            assert self.peercert is not None
+/usr/share/sigul/double_tls.py-            logging.info('Connection from %s' % repr(self.peercert.subject))
+/usr/share/sigul/double_tls.py-        except:
+/usr/share/sigul/double_tls.py-            self.__inner.close()
+/usr/share/sigul/double_tls.py-            self.__inner = None
+/usr/share/sigul/double_tls.py-            raise
+/usr/share/sigul/double_tls.py-
+/usr/share/sigul/double_tls.py-    def inner_close(self):
+/usr/share/sigul/double_tls.py-        '''Close the inner TLS session.'''
+/usr/share/sigul/double_tls.py-        if self.__inner is not None:
+--
+/usr/share/sigul/double_tls.py-            utils.nss_init(self.__config) # May raise utils.NSSInitError
+Not found

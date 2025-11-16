@@ -1,0 +1,5 @@
+=== NSS Text Files in /etc/pki/sigul ===
+-rw-------. 1 sigul sigul 32 Mar  9  2021 /etc/pki/sigul/nss-password.txt
+
+=== NSS Password File (length only) ===
+File exists, length: 32 bytes

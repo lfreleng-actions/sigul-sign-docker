@@ -42,10 +42,14 @@ services:
       # Role for unified initialization
       SIGUL_ROLE: server
     volumes:
-      # Mount unified sigul directory structure only
-      - sigul_server_data:/var/sigul
-      # Server reads CA from bridge data volume
-      - sigul_bridge_data:/var/sigul/bridge-shared:ro
+      # FHS-compliant volume mounts
+      - sigul_server_config:/etc/sigul:rw
+      - sigul_server_nss:/etc/pki/sigul/server:rw
+      - sigul_server_data:/var/lib/sigul/server:rw
+      - sigul_server_logs:/var/log/sigul/server:rw
+      - sigul_server_run:/run/sigul/server:rw
+      # Server reads CA from bridge NSS volume
+      - sigul_bridge_nss:/etc/pki/sigul/bridge-shared:ro
     networks:
       - sigul-network
     depends_on:
@@ -75,12 +79,15 @@ services:
       # Role for unified initialization
       SIGUL_ROLE: bridge
     volumes:
-      # Mount unified sigul directory structure only
-      - sigul_bridge_data:/var/sigul
+      # FHS-compliant volume mounts
+      - sigul_bridge_config:/etc/sigul:rw
+      - sigul_bridge_nss:/etc/pki/sigul/bridge:rw
+      - sigul_bridge_data:/var/lib/sigul/bridge:rw
+      - sigul_bridge_logs:/var/log/sigul/bridge:rw
     ports:
       - "44334:44334"
     healthcheck:
-      test: ["CMD-SHELL", "certutil -d sql:/var/sigul/nss/bridge -L -n sigul-ca >/dev/null 2>&1 && certutil -d sql:/var/sigul/nss/bridge -L -n sigul-bridge-cert >/dev/null 2>&1"]
+      test: ["CMD-SHELL", "certutil -d sql:/etc/pki/sigul/bridge -L -n sigul-ca >/dev/null 2>&1 && certutil -d sql:/etc/pki/sigul/bridge -L -n sigul-bridge-cert >/dev/null 2>&1"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -115,10 +122,12 @@ services:
     volumes:
       # Test workspace for file operations
       - ./test-workspace:/workspace:rw
-      # Mount unified sigul directory structure only
-      - sigul_client_data:/var/sigul
-      # Client reads CA from bridge data volume
-      - sigul_bridge_data:/var/sigul/bridge-shared:ro
+      # FHS-compliant volume mounts
+      - sigul_client_config:/etc/sigul:rw
+      - sigul_client_nss:/etc/pki/sigul/client:rw
+      - sigul_client_data:/var/lib/sigul/client:rw
+      # Client reads CA from bridge NSS volume
+      - sigul_bridge_nss:/etc/pki/sigul/bridge-shared:ro
     working_dir: /workspace
     networks:
       - sigul-network
@@ -213,8 +222,8 @@ services:
 
           # Server Health Check (NSS-based)
           echo -n '  Sigul Server (NSS certificate check): '
-          if docker exec sigul-server certutil -d sql:/var/sigul/nss/server -L -n sigul-ca >/dev/null 2>&1 && \
-             docker exec sigul-server certutil -d sql:/var/sigul/nss/server -L -n sigul-server-cert >/dev/null 2>&1; then
+          if docker exec sigul-server certutil -d sql:/etc/pki/sigul/server -L -n sigul-ca >/dev/null 2>&1 && \
+             docker exec sigul-server certutil -d sql:/etc/pki/sigul/server -L -n sigul-server-cert >/dev/null 2>&1; then
             echo '✅ OK'
           else
             echo '❌ FAIL'
@@ -253,8 +262,14 @@ services:
     container_name: sigul-network-tester
     volumes:
       - ./test-workspace:/debug/test-workspace:rw
+      - sigul_server_config:/debug/server-config:ro
+      - sigul_server_nss:/debug/server-nss:ro
       - sigul_server_data:/debug/server-data:ro
+      - sigul_bridge_config:/debug/bridge-config:ro
+      - sigul_bridge_nss:/debug/bridge-nss:ro
       - sigul_bridge_data:/debug/bridge-data:ro
+      - sigul_client_config:/debug/client-config:ro
+      - sigul_client_nss:/debug/client-nss:ro
       - sigul_client_data:/debug/client-data:ro
     networks:
       - sigul-network
@@ -281,8 +296,8 @@ services:
         echo ''
         echo 'Available manual commands (NSS-only):'
         echo '  - Test network connectivity: nc -z <service> <port>'
-        echo '  - Check NSS certificates: certutil -L -d sql:/debug/server-data/nss/<component>'
-        echo '  - View configurations: cat /debug/server-data/config/<config>'
+        echo '  - Check NSS certificates: certutil -L -d sql:/debug/server-nss'
+        echo '  - View configurations: cat /debug/server-config/<config>'
         echo '  - Test connectivity: nc -z <service> <port>'
         echo ''
         echo 'Services to test:'
@@ -298,8 +313,14 @@ services:
     container_name: sigul-debug-helper
     volumes:
       - ./test-workspace:/debug/test-workspace:rw
+      - sigul_server_config:/debug/server-config:ro
+      - sigul_server_nss:/debug/server-nss:ro
       - sigul_server_data:/debug/server-data:ro
+      - sigul_bridge_config:/debug/bridge-config:ro
+      - sigul_bridge_nss:/debug/bridge-nss:ro
       - sigul_bridge_data:/debug/bridge-data:ro
+      - sigul_client_config:/debug/client-config:ro
+      - sigul_client_nss:/debug/client-nss:ro
       - sigul_client_data:/debug/client-data:ro
     networks:
       - sigul-network
@@ -314,9 +335,9 @@ services:
         echo '[$(date)] Debug Helper Container Started (NSS-Only)'
         echo 'Available commands:'
         echo '  - Test network connectivity: nc -z <service> <port>'
-        echo '  - Check NSS certificates: certutil -L -d sql:/debug/server-data/nss/<component>'
-        echo '  - List NSS certificates: certutil -L -d sql:/debug/server-data/nss/<component>'
-        echo '  - View configurations: cat /debug/server-data/config/<config>'
+        echo '  - Check NSS certificates: certutil -L -d sql:/debug/server-nss'
+        echo '  - List NSS certificates: certutil -L -d sql:/debug/server-nss'
+        echo '  - View configurations: cat /debug/server-config/<config>'
         echo '  - Inspect volumes: ls -la /debug/<volume>/'
         echo ''
         echo 'Services available:'
@@ -326,21 +347,78 @@ services:
         tail -f /dev/null
 
 volumes:
-  # Sigul Server unified data directory (/var/sigul)
+  # Sigul Server volumes (FHS-compliant)
+  sigul_server_config:
+    driver: local
+    labels:
+      description: "Server configuration files (/etc/sigul)"
+      backup: "required"
+  sigul_server_nss:
+    driver: local
+    labels:
+      description: "Server NSS certificate database (/etc/pki/sigul/server)"
+      backup: "required"
   sigul_server_data:
     driver: local
+    labels:
+      description: "Server persistent data (/var/lib/sigul/server)"
+      backup: "required"
+  sigul_server_logs:
+    driver: local
+    labels:
+      description: "Server log files (/var/log/sigul/server)"
+      backup: "optional"
+  sigul_server_run:
+    driver: local
+    labels:
+      description: "Server runtime files (/run/sigul/server)"
+      backup: "no"
 
-  # Sigul Bridge unified data directory (/var/sigul)
+  # Sigul Bridge volumes (FHS-compliant)
+  sigul_bridge_config:
+    driver: local
+    labels:
+      description: "Bridge configuration files (/etc/sigul)"
+      backup: "required"
+  sigul_bridge_nss:
+    driver: local
+    labels:
+      description: "Bridge NSS certificate database (/etc/pki/sigul/bridge)"
+      backup: "required"
   sigul_bridge_data:
     driver: local
+    labels:
+      description: "Bridge persistent data (/var/lib/sigul/bridge)"
+      backup: "required"
+  sigul_bridge_logs:
+    driver: local
+    labels:
+      description: "Bridge log files (/var/log/sigul/bridge)"
+      backup: "optional"
 
-  # Sigul Client unified data directory (/var/sigul) for testing
+  # Sigul Client volumes (FHS-compliant) for testing
+  sigul_client_config:
+    driver: local
+    labels:
+      description: "Client configuration files (/etc/sigul)"
+      backup: "optional"
+  sigul_client_nss:
+    driver: local
+    labels:
+      description: "Client NSS certificate database (/etc/pki/sigul/client)"
+      backup: "optional"
   sigul_client_data:
     driver: local
+    labels:
+      description: "Client persistent data (/var/lib/sigul/client)"
+      backup: "optional"
 
   # Monitor data directory for heartbeat files
   sigul_monitor_data:
     driver: local
+    labels:
+      description: "Monitor heartbeat data"
+      backup: "no"
 
 networks:
   sigul-network:

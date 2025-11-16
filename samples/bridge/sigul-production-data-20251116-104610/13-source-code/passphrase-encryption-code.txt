@@ -1,0 +1,27 @@
+=== Passphrase Encryption Logic ===
+/usr/share/sigul/utils.py-    This allows a particular passphrase to be bound to multiple tokens at a
+/usr/share/sigul/utils.py-    single level.
+/usr/share/sigul/utils.py-    This is useful if you have multiple sigul servers: you would add the public
+/usr/share/sigul/utils.py-    keys for their tokens to the other servers to bind to, and then when you
+/usr/share/sigul/utils.py-    move the database to one of the other servers, they would still be able to
+/usr/share/sigul/utils.py:    decrypt bound passphrases.
+/usr/share/sigul/utils.py-    This mechanism is called Either-Or binding.
+/usr/share/sigul/utils.py-
+/usr/share/sigul/utils.py-    If the bind_params indicate this passphrase should not be bound, this
+/usr/share/sigul/utils.py-    will return the passphrase unmodified.
+/usr/share/sigul/utils.py-
+/usr/share/sigul/utils.py-    If the key is to be bound, the returned string is a json list with each
+/usr/share/sigul/utils.py-    entry an object string with at least two values:
+/usr/share/sigul/utils.py-    - method: the method used for binding (TPM, yubikey, ...)
+/usr/share/sigul/utils.py-    - value: the actual bound value
+/usr/share/sigul/utils.py-    More values can be added based on the binding method, like the TPM
+/usr/share/sigul/utils.py-    Endorsement Key public component to identify the TPM bound to.
+/usr/share/sigul/utils.py-    """
+/usr/share/sigul/utils.py-    if bind_params is None:
+/usr/share/sigul/utils.py-        # If we have no binding methods, just don't bind
+/usr/share/sigul/utils.py-        bind_params = []
+/usr/share/sigul/utils.py-
+/usr/share/sigul/utils.py-    for entry in bind_params:
+/usr/share/sigul/utils.py-        if not isinstance(entry, list):
+/usr/share/sigul/utils.py-            # This is probably the standard case.
+/usr/share/sigul/utils.py-            entry = [entry]

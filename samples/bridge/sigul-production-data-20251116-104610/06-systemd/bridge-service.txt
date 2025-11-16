@@ -1,0 +1,13 @@
+=== Sigul Bridge Service ===
+# /usr/lib/systemd/system/sigul_bridge.service
+[Unit]
+Description=Sigul bridge server
+After=network.target
+Documentation=https://fedorahosted.org/sigul/
+
+[Service]
+ExecStart=/usr/sbin/sigul_bridge -v
+Type=simple
+
+[Install]
+WantedBy=multi-user.target

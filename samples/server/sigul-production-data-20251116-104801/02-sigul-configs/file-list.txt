@@ -1,0 +1,9 @@
+=== Configuration Files ===
+total 32K
+drwxr-xr-x.   2 root  root   222 May 12  2023 .
+drwxr-xr-x. 100 root  root  8.0K Oct 20 18:25 ..
+-rw-------.   1 sigul sigul  621 Mar  9  2021 base.conf
+-rw-r--r--.   1 root  root  1.3K Mar  2  2017 client.conf
+-rw-------.   1 sigul sigul  663 Dec  1  2021 server-bridge-aws-us-west-2-dent-sigul-bridge-1.conf
+-rw-------.   1 sigul sigul  654 Dec  1  2021 server-bridge-aws-us-west-2-lfit-sigul-bridge-1.conf
+-rw-------.   1 sigul sigul  663 Dec  1  2021 server-bridge-aws-us-west-2-odpi-sigul-bridge-1.conf

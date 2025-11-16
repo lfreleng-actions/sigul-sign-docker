@@ -1,0 +1,51 @@
+=== Last 50 lines of /var/log/sigul-bridge-aws-us-west-2-lfit-sigul-bridge-1/sigul_server.log ===
+2025-11-16 10:46:24,011 INFO: Connection from CN=vex-sjc-oran-jenkins-sandbox-1.ci.codeaurora.org
+2025-11-16 10:46:24,155 INFO: Signed text 2fcd49671f51e282dc9fabcb020501ab7b5e21499761ca70be63190370f528f2bad4630370164ffd5cd2c0f03f4d35d4f0e61a372255af0ef4b378ed252f31c5 with key nagios-canary
+2025-11-16 10:46:30,170 INFO: Request: 'key' = 'nagios-canary', 'op' = 'sign-text', 'user' = 'vex-sjc-oran-jenkins-prod-1.ci.codeaurora.org'
+2025-11-16 10:46:30,234 INFO: Connection from CN=vex-sjc-oran-jenkins-prod-1.ci.codeaurora.org
+2025-11-16 10:46:30,373 INFO: Signed text 92049440e2d31f320389760614b3c7d56aae00157631c1934f7b28195cf786b7d7837aabfbd1761acaaa005c1dab0def288b1b44d397e1930e0f872d8f3ec833 with key nagios-canary
+2025-11-16 10:46:30,475 WARNING: (child) Exception in child
+Traceback (most recent call last):
+  File "/usr/share/sigul/double_tls.py", line 772, in __child
+    socket_fd.force_handshake()
+NSPRError: (PR_END_OF_FILE_ERROR) Encountered end of file.
+2025-11-16 10:46:30,478 INFO: Unexpected EOF
+2025-11-16 10:46:45,513 INFO: Unexpected EOF
+2025-11-16 10:46:54,170 INFO: Request: 'key' = 'nagios-canary', 'op' = 'sign-text', 'user' = 'vex-sjc-oran-jenkins-sandbox-1.ci.codeaurora.org'
+2025-11-16 10:46:54,229 INFO: Connection from CN=vex-sjc-oran-jenkins-sandbox-1.ci.codeaurora.org
+2025-11-16 10:46:54,371 INFO: Signed text 445f58372787d78b2a3ea938621e8abee501c07a3f101e020d5e6ec318e6d9ca124b7f24010c36d52fe97be6fa26237b7e305768e4043c45cf7a62e52f09cea6 with key nagios-canary
+2025-11-16 10:47:00,163 INFO: Request: 'key' = 'nagios-canary', 'op' = 'sign-text', 'user' = 'vex-sjc-oran-jenkins-prod-1.ci.codeaurora.org'
+2025-11-16 10:47:00,221 INFO: Connection from CN=vex-sjc-oran-jenkins-prod-1.ci.codeaurora.org
+2025-11-16 10:47:00,359 INFO: Signed text 193816a01bd5b83bcbf7fbb67bac48d14011323a69838ac5cf9381551695b3b8a4a75178729a6362beae10125f75c28a742d95ddb843d91853fa2d5ac86fff8c with key nagios-canary
+2025-11-16 10:47:00,459 WARNING: (child) Exception in child
+Traceback (most recent call last):
+  File "/usr/share/sigul/double_tls.py", line 772, in __child
+    socket_fd.force_handshake()
+NSPRError: (PR_END_OF_FILE_ERROR) Encountered end of file.
+2025-11-16 10:47:00,462 INFO: Unexpected EOF
+2025-11-16 10:47:15,513 INFO: Unexpected EOF
+2025-11-16 10:47:23,972 INFO: Request: 'key' = 'nagios-canary', 'op' = 'sign-text', 'user' = 'vex-sjc-oran-jenkins-sandbox-1.ci.codeaurora.org'
+2025-11-16 10:47:24,042 INFO: Connection from CN=vex-sjc-oran-jenkins-sandbox-1.ci.codeaurora.org
+2025-11-16 10:47:24,210 INFO: Signed text fa26a03f7d7d1912ea946e26ea60b8f73071dc989e755400283995f47250da3ab160d6c6b4634a0c3403f8090a879ac4ca34a0e5d5cdbdd071bb5323484683e0 with key nagios-canary
+2025-11-16 10:47:30,164 INFO: Request: 'key' = 'nagios-canary', 'op' = 'sign-text', 'user' = 'vex-sjc-oran-jenkins-prod-1.ci.codeaurora.org'
+2025-11-16 10:47:30,227 INFO: Connection from CN=vex-sjc-oran-jenkins-prod-1.ci.codeaurora.org
+2025-11-16 10:47:30,375 INFO: Signed text 3ac82f4ffad0ade6af8091a0dfc87222f8937b2d6344b4fcaed9944ddd6f76f63a324679cf3343b26ab00b9d3e5a2ff4b826ac1ddef5e341d61f0f90dbe6d785 with key nagios-canary
+2025-11-16 10:47:30,520 WARNING: (child) Exception in child
+Traceback (most recent call last):
+  File "/usr/share/sigul/double_tls.py", line 772, in __child
+    socket_fd.force_handshake()
+NSPRError: (PR_END_OF_FILE_ERROR) Encountered end of file.
+2025-11-16 10:47:30,523 INFO: Unexpected EOF
+2025-11-16 10:47:45,513 INFO: Unexpected EOF
+2025-11-16 10:47:54,166 INFO: Request: 'key' = 'nagios-canary', 'op' = 'sign-text', 'user' = 'vex-sjc-oran-jenkins-sandbox-1.ci.codeaurora.org'
+2025-11-16 10:47:54,227 INFO: Connection from CN=vex-sjc-oran-jenkins-sandbox-1.ci.codeaurora.org
+2025-11-16 10:47:54,373 INFO: Signed text d3e5d6b7f1bbe6da758187d2df17c0de2ae287201ad2d63aa15e2155b20fede9ae82c04a89e0d81bb8254e3b149b01e1cd550919b853440b2cc061f6ea10171d with key nagios-canary
+2025-11-16 10:48:00,180 INFO: Request: 'key' = 'nagios-canary', 'op' = 'sign-text', 'user' = 'vex-sjc-oran-jenkins-prod-1.ci.codeaurora.org'
+2025-11-16 10:48:00,242 INFO: Connection from CN=vex-sjc-oran-jenkins-prod-1.ci.codeaurora.org
+2025-11-16 10:48:00,387 INFO: Signed text 693bf311fd010f880007a111683d2eeafcaea55bdb37840fc057be64819b2b8da13c6862c666179795c4bcb1d2b4f8d9ef55284befd33745f2792b2488bb87b2 with key nagios-canary
+2025-11-16 10:48:00,498 WARNING: (child) Exception in child
+Traceback (most recent call last):
+  File "/usr/share/sigul/double_tls.py", line 772, in __child
+    socket_fd.force_handshake()
+NSPRError: (PR_END_OF_FILE_ERROR) Encountered end of file.
+2025-11-16 10:48:00,501 INFO: Unexpected EOF

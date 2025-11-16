@@ -1,0 +1,43 @@
+=== /var/log/sigul* Permissions ===
+-rw-r--r--. root root system_u:object_r:sigul_log_t:s0 /var/log/sigul_server.log
+
+/var/log/sigul-base:
+drwx------. root root system_u:object_r:var_log_t:s0   .
+drwxr-xr-x. root root system_u:object_r:var_log_t:s0   ..
+
+/var/log/sigul-bridge-aws-us-west-2-dent-sigul-bridge-1:
+drwx------. root root system_u:object_r:var_log_t:s0   .
+drwxr-xr-x. root root system_u:object_r:var_log_t:s0   ..
+-rw-r--r--. root root system_u:object_r:sigul_log_t:s0 sigul_server.log
+-rw-r--r--. root root system_u:object_r:sigul_log_t:s0 sigul_server.log-20220123.gz
+-rw-r--r--. root root system_u:object_r:sigul_log_t:s0 sigul_server.log-20220130.gz
+-rw-r--r--. root root system_u:object_r:sigul_log_t:s0 sigul_server.log-20220206.gz
+-rw-r--r--. root root system_u:object_r:sigul_log_t:s0 sigul_server.log-20221209.gz
+
+/var/log/sigul-bridge-aws-us-west-2-lfit-sigul-bridge-1:
+drwx------. root root system_u:object_r:var_log_t:s0   .
+drwxr-xr-x. root root system_u:object_r:var_log_t:s0   ..
+-rw-r--r--. root root system_u:object_r:sigul_log_t:s0 sigul_server.log
+-rw-r--r--. root root system_u:object_r:sigul_log_t:s0 sigul_server.log-20251026.gz
+-rw-r--r--. root root system_u:object_r:sigul_log_t:s0 sigul_server.log-20251102.gz
+-rw-r--r--. root root system_u:object_r:sigul_log_t:s0 sigul_server.log-20251109.gz
+-rw-r--r--. root root system_u:object_r:sigul_log_t:s0 sigul_server.log-20251116.gz
+
+/var/log/sigul-bridge-aws-us-west-2-odpi-sigul-bridge-1:
+drwx------. root root system_u:object_r:var_log_t:s0   .
+drwxr-xr-x. root root system_u:object_r:var_log_t:s0   ..
+-rw-r--r--. root root system_u:object_r:sigul_log_t:s0 sigul_server.log
+-rw-r--r--. root root system_u:object_r:sigul_log_t:s0 sigul_server.log-20220123.gz
+-rw-r--r--. root root system_u:object_r:sigul_log_t:s0 sigul_server.log-20220130.gz
+-rw-r--r--. root root system_u:object_r:sigul_log_t:s0 sigul_server.log-20220206.gz
+-rw-r--r--. root root system_u:object_r:sigul_log_t:s0 sigul_server.log-20220213.gz
+
+/var/log/sigul--etc-sigul-server-bridge-aws-us-west-2-dent-sigul-bridge-1.conf:
+drwxr-xr-x. root root unconfined_u:object_r:var_log_t:s0 .
+drwxr-xr-x. root root system_u:object_r:var_log_t:s0   ..
+-rw-r--r--. root root system_u:object_r:sigul_log_t:s0 sigul_server.log
+
+/var/log/sigul--etc-sigul-server-bridge-aws-us-west-2-odpi-sigul-bridge-1.conf:
+drwxr-xr-x. root root unconfined_u:object_r:var_log_t:s0 .
+drwxr-xr-x. root root system_u:object_r:var_log_t:s0   ..
+-rw-r--r--. root root system_u:object_r:sigul_log_t:s0 sigul_server.log

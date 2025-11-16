@@ -1,0 +1,5 @@
+=== /etc/sigul/ Permissions ===
+drwxr-xr-x. root  root  system_u:object_r:sigul_conf_t:s0 .
+drwxr-xr-x. root  root  system_u:object_r:etc_t:s0       ..
+-rw-------. sigul sigul system_u:object_r:sigul_conf_t:s0 bridge.conf
+-rw-r--r--. root  root  system_u:object_r:sigul_conf_t:s0 client.conf

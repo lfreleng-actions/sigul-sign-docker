@@ -1,0 +1,6 @@
+=== Log Directory Structure ===
+/var/log/sigul_bridge.log
+/var/log/sigul_bridge.log-20251026.gz
+/var/log/sigul_bridge.log-20251102.gz
+/var/log/sigul_bridge.log-20251109.gz
+/var/log/sigul_bridge.log-20251116.gz

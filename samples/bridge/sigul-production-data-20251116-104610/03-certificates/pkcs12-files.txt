@@ -1,0 +1,5 @@
+=== PKCS#12 Certificate Files ===
+-rw-------. 1 sigul sigul 2.8K Dec  1  2021 /etc/pki/sigul/aws-us-west-2-dent-jenkins-1.ci.codeaurora.org.p12
+-rw-------. 1 sigul sigul 2.8K Dec  1  2021 /etc/pki/sigul/aws-us-west-2-dent-jenkins-sandbox-1.ci.codeaurora.org.p12
+-rw-------. 1 sigul sigul 2.8K Nov 30  2021 /etc/pki/sigul/aws-us-west-2-lfit-sigul-bridge-1.dr.codeaurora.org.p12
+-rw-------. 1 sigul sigul 2.7K Dec  1  2021 /etc/pki/sigul/sigul-bridge-us-west-2.linuxfoundation.org.p12

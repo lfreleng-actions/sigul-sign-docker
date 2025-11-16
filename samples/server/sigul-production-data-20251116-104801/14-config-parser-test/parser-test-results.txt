@@ -1,0 +1,10 @@
+=== Testing Config Parser Formats ===
+Testing COLON format:
+  SUCCESS - Colon format works
+  Value read: value
+
+Testing EQUALS format:
+  SUCCESS - Equals format works
+  Value read: value
+
+CONCLUSION: Both formats should work in Python 2 ConfigParser

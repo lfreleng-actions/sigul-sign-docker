@@ -1,0 +1,2 @@
+=== PKCS#12 Certificate Files ===
+-rw-------. 1 sigul sigul 2.8K Mar  9  2021 /etc/pki/sigul/aws-us-west-2-lfit-sigul-server-1.dr.codeaurora.org.p12

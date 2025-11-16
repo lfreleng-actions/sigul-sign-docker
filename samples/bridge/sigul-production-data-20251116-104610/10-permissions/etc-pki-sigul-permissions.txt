@@ -1,0 +1,11 @@
+=== /etc/pki/sigul/ Permissions ===
+drwx------. sigul sigul system_u:object_r:cert_t:s0      .
+drwxr-xr-x. root  root  system_u:object_r:cert_t:s0      ..
+-rw-------. sigul sigul system_u:object_r:cert_t:s0      aws-us-west-2-dent-jenkins-1.ci.codeaurora.org.p12
+-rw-------. sigul sigul system_u:object_r:cert_t:s0      aws-us-west-2-dent-jenkins-sandbox-1.ci.codeaurora.org.p12
+-rw-------. sigul sigul system_u:object_r:cert_t:s0      aws-us-west-2-lfit-sigul-bridge-1.dr.codeaurora.org.p12
+-rw-------. sigul sigul system_u:object_r:cert_t:s0      cert8.db
+-rw-------. sigul sigul system_u:object_r:cert_t:s0      key3.db
+-rw-------. sigul sigul system_u:object_r:cert_t:s0      nss-password.txt
+-rw-------. sigul sigul system_u:object_r:cert_t:s0      secmod.db
+-rw-------. sigul sigul system_u:object_r:cert_t:s0      sigul-bridge-us-west-2.linuxfoundation.org.p12

@@ -1,0 +1,10 @@
+=== Certificate List ===
+
+Certificate Nickname                                         Trust Attributes
+                                                             SSL,S/MIME,JAR/XPI
+
+easyrsa                                                      CT,,
+aws-us-west-2-lfit-sigul-bridge-1.dr.codeaurora.org          u,u,u
+aws-us-west-2-dent-jenkins-sandbox-1.ci.codeaurora.org       u,u,u
+sigul-bridge-us-west-2.linuxfoundation.org                   u,u,u
+aws-us-west-2-dent-jenkins-1.ci.codeaurora.org               u,u,u

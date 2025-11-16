@@ -1,0 +1,9 @@
+=== NSS Database Format ===
+/etc/pki/sigul/cert8.db:  Berkeley DB 1.85 (Hash, version 2, native byte-order)
+/etc/pki/sigul/key3.db:   Berkeley DB 1.85 (Hash, version 2, native byte-order)
+/etc/pki/sigul/secmod.db: Berkeley DB 1.85 (Hash, version 2, native byte-order)
+
+=== Database Sizes ===
+-rw-------. 1 sigul sigul 64K Dec  1  2021 /etc/pki/sigul/cert8.db
+-rw-------. 1 sigul sigul 16K Dec  1  2021 /etc/pki/sigul/key3.db
+-rw-------. 1 sigul sigul 16K Nov 30  2021 /etc/pki/sigul/secmod.db

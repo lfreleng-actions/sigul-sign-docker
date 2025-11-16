@@ -1,0 +1,17 @@
+=== Sigul Server Service Template ===
+# /usr/lib/systemd/system/sigul_server@.service
+[Unit]
+Description=Sigul vault server (template)
+After=network.target
+Documentation=https://fedorahosted.org/sigul/
+
+[Service]
+ExecStart=/usr/sbin/sigul_server -c /etc/sigul/server-%i.conf --internal-log-dir=/var/log/sigul-%i --internal-pid-dir=/run/sigul-%i -v
+Type=simple
+Restart=on-failure
+RestartSec=5s
+StartLimitInterval=10
+StartLimitBurst=5
+
+[Install]
+WantedBy=multi-user.target

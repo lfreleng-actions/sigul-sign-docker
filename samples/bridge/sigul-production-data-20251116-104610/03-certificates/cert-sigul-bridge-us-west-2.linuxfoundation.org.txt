@@ -1,0 +1,190 @@
+==========================================
+Certificate Nickname: sigul-bridge-us-west-2.linuxfoundation.org
+==========================================
+
+=== NSS Format (certutil) ===
+Certificate:
+    Data:
+        Version: 3 (0x2)
+        Serial Number:
+            43:44:91:4e:86:fe:10:ff:85:2a:cc:7f:1c:fa:b4:15
+        Signature Algorithm: PKCS #1 SHA-256 With RSA Encryption
+        Issuer: "CN=EasyRSA"
+        Validity:
+            Not Before: Wed Dec 01 21:20:42 2021
+            Not After : Sat Nov 29 21:20:42 2031
+        Subject: "CN=sigul-bridge-us-west-2.linuxfoundation.org"
+        Subject Public Key Info:
+            Public Key Algorithm: PKCS #1 RSA Encryption
+            RSA Public Key:
+                Modulus:
+                    aa:be:d5:5f:19:52:dc:d7:4f:c1:21:c8:cc:f0:c2:fb:
+                    46:f8:ad:b6:8e:a5:0b:70:d2:bc:96:27:49:41:83:0b:
+                    38:21:45:aa:93:67:a1:e9:43:33:69:32:06:e4:a8:d1:
+                    6e:04:47:7e:1e:b0:a6:43:60:de:f1:10:b7:6d:7e:f7:
+                    0c:b8:3d:42:d6:51:9e:f7:ef:ea:a4:86:e6:14:a9:b5:
+                    cb:b5:a3:03:4a:53:6a:20:f3:43:be:90:6f:21:72:df:
+                    b2:2f:7b:67:13:63:b6:c8:d7:e8:18:70:40:c4:de:e3:
+                    5a:ba:c1:8f:52:ab:fd:70:ee:e8:79:1e:be:10:df:66:
+                    e7:54:a1:b6:37:75:a4:6f:4e:5c:87:f7:2c:6d:fb:3c:
+                    2b:ca:af:09:d9:9f:88:fc:39:6f:dd:62:8b:ef:6a:4c:
+                    d0:8c:4e:34:d9:1d:89:b8:1e:28:e2:f7:d5:db:a7:0a:
+                    31:a8:55:e7:d0:45:83:5e:bd:89:ef:1e:0c:cf:ea:ca:
+                    e8:26:9a:44:63:42:11:b6:6b:56:7c:56:87:b0:f6:4c:
+                    a4:f7:6f:a7:8e:ae:0c:e7:64:ce:26:74:15:cf:67:de:
+                    61:26:6b:07:c5:40:7e:51:d5:4f:4f:99:ce:81:66:fb:
+                    01:06:fb:0f:de:16:8a:1d:88:e0:94:57:b9:83:f4:91
+                Exponent: 65537 (0x10001)
+        Signed Extensions:
+            Name: Certificate Basic Constraints
+            Data: Is not a CA.
+
+            Name: Certificate Subject Key ID
+            Data:
+                3b:be:8a:60:cd:9a:34:45:64:40:7e:6a:83:19:0a:66:
+                81:9c:64:ac
+
+            Name: Certificate Authority Key Identifier
+            Key ID:
+                b3:8c:6e:5d:8b:8d:db:41:f8:ed:16:94:ab:7a:05:3a:
+                46:f4:07:24
+            Issuer:
+                Directory Name: "CN=EasyRSA"
+            Serial Number:
+                00:da:99:94:06:33:56:82:24
+
+            Name: Extended Key Usage
+                TLS Web Server Authentication Certificate
+                TLS Web Client Authentication Certificate
+
+            Name: Certificate Key Usage
+            Usages: Digital Signature
+                    Key Encipherment
+
+            Name: Certificate Subject Alt Name
+            DNS name: "sigul-bridge-us-west-2.linuxfoundation.org"
+
+    Signature Algorithm: PKCS #1 SHA-256 With RSA Encryption
+    Signature:
+        84:cb:3f:90:ff:65:de:9e:02:a7:59:3b:ce:80:f9:c1:
+        84:2d:61:b5:b5:1a:92:e1:1f:b1:46:a4:ca:8b:65:dc:
+        01:18:e1:2d:89:ae:63:95:d8:db:87:54:7d:29:c1:76:
+        a6:03:e4:33:a8:81:5c:54:7a:66:05:c8:d0:42:ab:15:
+        e2:35:82:6f:7e:77:d0:6c:78:83:1f:89:8e:40:8a:a3:
+        3b:81:fd:2a:94:8e:44:19:83:fe:4f:64:0b:4e:63:72:
+        af:56:73:d2:2e:79:41:c6:47:16:a6:e2:cb:7e:2b:ca:
+        e9:9e:fd:3e:77:0d:d0:6e:9a:9e:b1:16:b1:f3:79:8d:
+        d6:58:f1:d4:9d:35:a5:eb:9e:a7:da:bb:22:a8:82:f5:
+        f5:88:33:49:4d:77:be:42:2f:c9:f9:63:02:2d:ff:e9:
+        a9:b7:2c:e3:5b:37:10:32:49:31:40:83:1e:64:db:4b:
+        d9:35:53:58:78:bd:82:f9:b6:0e:87:2c:5b:eb:ed:d7:
+        db:31:2c:31:4f:85:57:b5:fd:c5:a2:12:a6:ef:59:fa:
+        78:3e:b1:37:36:09:5a:cf:1f:3e:64:16:82:6e:03:96:
+        c0:0c:fc:3c:4a:6c:81:de:42:38:76:b6:cb:55:e9:91:
+        ec:02:0c:4d:c9:16:98:eb:91:39:3a:0f:41:46:9e:6c
+    Fingerprint (SHA-256):
+        4E:20:9D:6E:06:BC:69:A4:7F:8D:5D:AF:03:5E:E1:13:82:AC:D0:FE:43:6C:4F:CD:E4:4E:2D:00:D3:49:EE:03
+    Fingerprint (SHA1):
+        87:D1:11:99:AD:79:D6:06:2F:23:85:92:52:FE:C2:E9:88:77:51:DA
+
+    Mozilla-CA-Policy: false (attribute missing)
+    Certificate Trust Flags:
+        SSL Flags:
+            User
+        Email Flags:
+            User
+        Object Signing Flags:
+            User
+
+
+=== OpenSSL Detailed Format ===
+Certificate:
+    Data:
+        Version: 3 (0x2)
+        Serial Number:
+            43:44:91:4e:86:fe:10:ff:85:2a:cc:7f:1c:fa:b4:15
+    Signature Algorithm: sha256WithRSAEncryption
+        Issuer: CN=EasyRSA
+        Validity
+            Not Before: Dec  1 21:20:42 2021 GMT
+            Not After : Nov 29 21:20:42 2031 GMT
+        Subject: CN=sigul-bridge-us-west-2.linuxfoundation.org
+        Subject Public Key Info:
+            Public Key Algorithm: rsaEncryption
+                Public-Key: (2048 bit)
+                Modulus:
+                    00:aa:be:d5:5f:19:52:dc:d7:4f:c1:21:c8:cc:f0:
+                    c2:fb:46:f8:ad:b6:8e:a5:0b:70:d2:bc:96:27:49:
+                    41:83:0b:38:21:45:aa:93:67:a1:e9:43:33:69:32:
+                    06:e4:a8:d1:6e:04:47:7e:1e:b0:a6:43:60:de:f1:
+                    10:b7:6d:7e:f7:0c:b8:3d:42:d6:51:9e:f7:ef:ea:
+                    a4:86:e6:14:a9:b5:cb:b5:a3:03:4a:53:6a:20:f3:
+                    43:be:90:6f:21:72:df:b2:2f:7b:67:13:63:b6:c8:
+                    d7:e8:18:70:40:c4:de:e3:5a:ba:c1:8f:52:ab:fd:
+                    70:ee:e8:79:1e:be:10:df:66:e7:54:a1:b6:37:75:
+                    a4:6f:4e:5c:87:f7:2c:6d:fb:3c:2b:ca:af:09:d9:
+                    9f:88:fc:39:6f:dd:62:8b:ef:6a:4c:d0:8c:4e:34:
+                    d9:1d:89:b8:1e:28:e2:f7:d5:db:a7:0a:31:a8:55:
+                    e7:d0:45:83:5e:bd:89:ef:1e:0c:cf:ea:ca:e8:26:
+                    9a:44:63:42:11:b6:6b:56:7c:56:87:b0:f6:4c:a4:
+                    f7:6f:a7:8e:ae:0c:e7:64:ce:26:74:15:cf:67:de:
+                    61:26:6b:07:c5:40:7e:51:d5:4f:4f:99:ce:81:66:
+                    fb:01:06:fb:0f:de:16:8a:1d:88:e0:94:57:b9:83:
+                    f4:91
+                Exponent: 65537 (0x10001)
+        X509v3 extensions:
+            X509v3 Basic Constraints:
+                CA:FALSE
+            X509v3 Subject Key Identifier:
+                3B:BE:8A:60:CD:9A:34:45:64:40:7E:6A:83:19:0A:66:81:9C:64:AC
+            X509v3 Authority Key Identifier:
+                keyid:B3:8C:6E:5D:8B:8D:DB:41:F8:ED:16:94:AB:7A:05:3A:46:F4:07:24
+                DirName:/CN=EasyRSA
+                serial:DA:99:94:06:33:56:82:24
+
+            X509v3 Extended Key Usage:
+                TLS Web Server Authentication, TLS Web Client Authentication
+            X509v3 Key Usage:
+                Digital Signature, Key Encipherment
+            X509v3 Subject Alternative Name:
+                DNS:sigul-bridge-us-west-2.linuxfoundation.org
+    Signature Algorithm: sha256WithRSAEncryption
+         84:cb:3f:90:ff:65:de:9e:02:a7:59:3b:ce:80:f9:c1:84:2d:
+         61:b5:b5:1a:92:e1:1f:b1:46:a4:ca:8b:65:dc:01:18:e1:2d:
+         89:ae:63:95:d8:db:87:54:7d:29:c1:76:a6:03:e4:33:a8:81:
+         5c:54:7a:66:05:c8:d0:42:ab:15:e2:35:82:6f:7e:77:d0:6c:
+         78:83:1f:89:8e:40:8a:a3:3b:81:fd:2a:94:8e:44:19:83:fe:
+         4f:64:0b:4e:63:72:af:56:73:d2:2e:79:41:c6:47:16:a6:e2:
+         cb:7e:2b:ca:e9:9e:fd:3e:77:0d:d0:6e:9a:9e:b1:16:b1:f3:
+         79:8d:d6:58:f1:d4:9d:35:a5:eb:9e:a7:da:bb:22:a8:82:f5:
+         f5:88:33:49:4d:77:be:42:2f:c9:f9:63:02:2d:ff:e9:a9:b7:
+         2c:e3:5b:37:10:32:49:31:40:83:1e:64:db:4b:d9:35:53:58:
+         78:bd:82:f9:b6:0e:87:2c:5b:eb:ed:d7:db:31:2c:31:4f:85:
+         57:b5:fd:c5:a2:12:a6:ef:59:fa:78:3e:b1:37:36:09:5a:cf:
+         1f:3e:64:16:82:6e:03:96:c0:0c:fc:3c:4a:6c:81:de:42:38:
+         76:b6:cb:55:e9:91:ec:02:0c:4d:c9:16:98:eb:91:39:3a:0f:
+         41:46:9e:6c
+
+=== PEM Format ===
+-----BEGIN CERTIFICATE-----
+MIIDpjCCAo6gAwIBAgIQQ0SRTob+EP+FKsx/HPq0FTANBgkqhkiG9w0BAQsFADAS
+MRAwDgYDVQQDDAdFYXN5UlNBMB4XDTIxMTIwMTIxMjA0MloXDTMxMTEyOTIxMjA0
+MlowNTEzMDEGA1UEAwwqc2lndWwtYnJpZGdlLXVzLXdlc3QtMi5saW51eGZvdW5k
+YXRpb24ub3JnMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAqr7VXxlS
+3NdPwSHIzPDC+0b4rbaOpQtw0ryWJ0lBgws4IUWqk2eh6UMzaTIG5KjRbgRHfh6w
+pkNg3vEQt21+9wy4PULWUZ737+qkhuYUqbXLtaMDSlNqIPNDvpBvIXLfsi97ZxNj
+tsjX6BhwQMTe41q6wY9Sq/1w7uh5Hr4Q32bnVKG2N3Wkb05ch/csbfs8K8qvCdmf
+iPw5b91ii+9qTNCMTjTZHYm4Hiji99XbpwoxqFXn0EWDXr2J7x4Mz+rK6CaaRGNC
+EbZrVnxWh7D2TKT3b6eOrgznZM4mdBXPZ95hJmsHxUB+UdVPT5nOgWb7AQb7D94W
+ih2I4JRXuYP0kQIDAQABo4HUMIHRMAkGA1UdEwQCMAAwHQYDVR0OBBYEFDu+imDN
+mjRFZEB+aoMZCmaBnGSsMEIGA1UdIwQ7MDmAFLOMbl2LjdtB+O0WlKt6BTpG9Ack
+oRakFDASMRAwDgYDVQQDDAdFYXN5UlNBggkA2pmUBjNWgiQwHQYDVR0lBBYwFAYI
+KwYBBQUHAwEGCCsGAQUFBwMCMAsGA1UdDwQEAwIFoDA1BgNVHREELjAsgipzaWd1
+bC1icmlkZ2UtdXMtd2VzdC0yLmxpbnV4Zm91bmRhdGlvbi5vcmcwDQYJKoZIhvcN
+AQELBQADggEBAITLP5D/Zd6eAqdZO86A+cGELWG1tRqS4R+xRqTKi2XcARjhLYmu
+Y5XY24dUfSnBdqYD5DOogVxUemYFyNBCqxXiNYJvfnfQbHiDH4mOQIqjO4H9KpSO
+RBmD/k9kC05jcq9Wc9IueUHGRxam4st+K8rpnv0+dw3QbpqesRax83mN1ljx1J01
+peuep9q7IqiC9fWIM0lNd75CL8n5YwIt/+mptyzjWzcQMkkxQIMeZNtL2TVTWHi9
+gvm2DocsW+vt19sxLDFPhVe1/cWiEqbvWfp4PrE3Nglazx8+ZBaCbgOWwAz8PEps
+gd5COHa2y1XpkewCDE3JFpjrkTk6D0FGnmw=
+-----END CERTIFICATE-----

@@ -1,0 +1,30 @@
+=== GPG Public Keys (list only) ===
+/var/lib/sigul/gnupg/pubring.gpg
+--------------------------------
+pub   2048R/B017150D 2021-03-17
+uid                  Nagios Canary (Nagios Canary Key) <sysadmin+canary@linuxfoundation.org>
+sub   2048R/313AD9D0 2021-03-17
+
+pub   2048R/29A265BA 2021-03-17
+uid                  Dent Release Key (2021) (Dent Release Signing Key (2021)) <sysadmin+dent@linuxfoundation.org>
+sub   2048R/69E62F1F 2021-03-17
+
+pub   2048R/28F3CF6F 2021-03-17
+uid                  Dent Sandbox Key (Dent Sandbox Test Key) <sysadmin+dent@linuxfoundation.org>
+sub   2048R/8246A9EE 2021-03-17
+
+pub   2048R/08674894 2021-09-09
+uid                  ODPI Release Key (2021) (ODPI Release Signing Key (2021)) <collab-it+odpi@linuxfoundation.org>
+sub   2048R/23799AC0 2021-09-09
+
+pub   2048R/3CFF437F 2022-02-07
+uid                  O-RAN-SC Release Key (2022) (O-RAN-SC Release Signing Key (2022)) <collab-it+o-ran-sc@linuxfoundation.org>
+sub   2048R/003FA4DA 2022-02-07
+
+pub   2048R/8E9D217A 2022-02-08
+uid                  O-RAN-SC Sandbox Key (O-RAN-SC Sandbox Test Key) <collab-it+o-ran-sc@linuxfoundation.org>
+sub   2048R/97A04188 2022-02-08
+
+
+=== GPG Secret Keys (count only) ===
+6

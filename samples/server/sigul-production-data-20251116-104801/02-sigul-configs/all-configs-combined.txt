@@ -1,0 +1,174 @@
+=== All Sigul Config Sections and Options ===
+
+========== /etc/sigul/base.conf ==========
+# MANAGED BY PUPPET
+
+[server]
+bridge-hostname: localhost
+bridge-port: 44433
+max-file-payload-size: 1073741824
+max-memory-payload-size: 1048576
+max-rpms-payload-size: 10737418240
+server-cert-nickname: aws-us-west-2-lfit-sigul-server-1.dr.codeaurora.org
+signing-timeout: 60
+
+[database]
+database-path: /var/lib/sigul/server.sqlite
+
+[gnupg]
+gnupg-home: /var/lib/sigul/gnupg
+gnupg-key-type: RSA
+gnupg-key-length: 2048
+gnupg-key-usage: sign
+passphrase-length: 64
+
+[daemon]
+unix-user: sigul
+unix-group: sigul
+
+[nss]
+nss-dir: /etc/pki/sigul
+nss-password: uFMLuCUpppkfV+GLqjv8W7ptCoV3z8li
+nss-min-tls: tls1.2
+nss-max-tls: tls1.2
+
+
+========== /etc/sigul/client.conf ==========
+# This is a configuration for the sigul client.
+
+[client]
+# Host name of the publically acessible bridge to the server
+bridge-hostname: localhost
+# Port on which the bridge expects client connections
+; bridge-port: 44334
+# Nickname of the client's certificate in the NSS database specified below
+; client-cert-nickname: sigul-client-cert
+# Host name of the private server, used for verifying its certificate
+server-hostname: localhost
+# Name of the invoking user, defaults to login name on the local machine
+; user-name: nobody
+
+[koji]
+# Config file used to connect to the Koji hub
+; koji-config: ~/.koji/config
+# Recognized alternative instances
+; koji-instances:
+
+# Example configuration of alternative instances:
+# koji-instances: ppc64 s390
+# Configuration paths for alternative instances:
+# koji-config-ppc64: ~/.koji-ppc64.conf
+# koji-config-s390: ~/.koji-s390.conf
+
+[nss]
+# Path to a directory containing a NSS database
+; nss-dir: ~/.sigul
+# Password for accessing the NSS database.  If not specified, the client will
+# ask on startup
+; nss-password is not specified by default, but sigul_setup_client stores
+; it in ~/.sigul/client.conf
+# Minimum and maximum versions of TLS used
+nss-min-tls: tls1.2
+nss-max-tls: tls1.2
+
+[binding]
+# List of binding modules enabled, comma separated
+enabled:
+
+========== /etc/sigul/server-bridge-aws-us-west-2-dent-sigul-bridge-1.conf ==========
+# MANAGED BY PUPPET
+
+[server]
+bridge-hostname: aws-us-west-2-dent-sigul-bridge-1.ci.codeaurora.org
+bridge-port: 44333
+max-file-payload-size: 1073741824
+max-memory-payload-size: 1048576
+max-rpms-payload-size: 10737418240
+server-cert-nickname: aws-us-west-2-lfit-sigul-server-1.dr.codeaurora.org
+signing-timeout: 60
+
+[database]
+database-path: /var/lib/sigul/server.sqlite
+
+[gnupg]
+gnupg-home: /var/lib/sigul/gnupg
+gnupg-key-type: RSA
+gnupg-key-length: 2048
+gnupg-key-usage: sign
+passphrase-length: 64
+
+[daemon]
+unix-user: sigul
+unix-group: sigul
+
+[nss]
+nss-dir: /etc/pki/sigul
+nss-password: uFMLuCUpppkfV+GLqjv8W7ptCoV3z8li
+nss-min-tls: tls1.2
+nss-max-tls: tls1.2
+
+
+========== /etc/sigul/server-bridge-aws-us-west-2-lfit-sigul-bridge-1.conf ==========
+# MANAGED BY PUPPET
+
+[server]
+bridge-hostname: sigul-bridge-us-west-2.linuxfoundation.org
+bridge-port: 44333
+max-file-payload-size: 1073741824
+max-memory-payload-size: 1048576
+max-rpms-payload-size: 10737418240
+server-cert-nickname: aws-us-west-2-lfit-sigul-server-1.dr.codeaurora.org
+signing-timeout: 60
+
+[database]
+database-path: /var/lib/sigul/server.sqlite
+
+[gnupg]
+gnupg-home: /var/lib/sigul/gnupg
+gnupg-key-type: RSA
+gnupg-key-length: 2048
+gnupg-key-usage: sign
+passphrase-length: 64
+
+[daemon]
+unix-user: sigul
+unix-group: sigul
+
+[nss]
+nss-dir: /etc/pki/sigul
+nss-password: uFMLuCUpppkfV+GLqjv8W7ptCoV3z8li
+nss-min-tls: tls1.2
+nss-max-tls: tls1.2
+
+
+========== /etc/sigul/server-bridge-aws-us-west-2-odpi-sigul-bridge-1.conf ==========
+# MANAGED BY PUPPET
+
+[server]
+bridge-hostname: aws-us-west-2-odpi-sigul-bridge-1.ci.codeaurora.org
+bridge-port: 44333
+max-file-payload-size: 1073741824
+max-memory-payload-size: 1048576
+max-rpms-payload-size: 10737418240
+server-cert-nickname: aws-us-west-2-lfit-sigul-server-1.dr.codeaurora.org
+signing-timeout: 60
+
+[database]
+database-path: /var/lib/sigul/server.sqlite
+
+[gnupg]
+gnupg-home: /var/lib/sigul/gnupg
+gnupg-key-type: RSA
+gnupg-key-length: 2048
+gnupg-key-usage: sign
+passphrase-length: 64
+
+[daemon]
+unix-user: sigul
+unix-group: sigul
+
+[nss]
+nss-dir: /etc/pki/sigul
+nss-password: uFMLuCUpppkfV+GLqjv8W7ptCoV3z8li
+nss-min-tls: tls1.2
+nss-max-tls: tls1.2

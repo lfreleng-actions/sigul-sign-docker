@@ -38,16 +38,17 @@ readonly BLUE='\033[0;34m'
 readonly PURPLE='\033[0;35m'
 readonly NC='\033[0m'
 
-# Configuration constants
-readonly SIGUL_BASE_DIR="/var/sigul"
-readonly NSS_BASE_DIR="$SIGUL_BASE_DIR/nss"
-readonly SECRETS_DIR="$SIGUL_BASE_DIR/secrets"
-readonly CONFIG_DIR="$SIGUL_BASE_DIR/config"
-readonly LOGS_DIR="$SIGUL_BASE_DIR/logs"
-readonly DB_DIR="/var/lib/sigul"
-readonly GNUPG_DIR="/var/lib/sigul/gnupg"
-readonly CA_EXPORT_DIR="$SIGUL_BASE_DIR/ca-export"
-readonly CA_IMPORT_DIR="$SIGUL_BASE_DIR/ca-import"
+# Configuration constants - FHS-compliant paths
+readonly CONFIG_DIR="/etc/sigul"
+readonly NSS_BASE_DIR="/etc/pki/sigul"
+readonly DATA_BASE_DIR="/var/lib/sigul"
+readonly LOGS_DIR="/var/log/sigul"
+readonly RUN_DIR="/run/sigul"
+readonly DB_DIR="$DATA_BASE_DIR"
+readonly GNUPG_DIR="$DATA_BASE_DIR/server/gnupg"
+readonly SECRETS_DIR="$DATA_BASE_DIR/secrets"
+readonly CA_EXPORT_DIR="$DATA_BASE_DIR/ca-export"
+readonly CA_IMPORT_DIR="$DATA_BASE_DIR/ca-import"
 
 # NSS certificate nicknames (standardized)
 readonly CA_NICKNAME="sigul-ca"
@@ -94,51 +95,59 @@ fatal() {
 #######################################
 
 create_directory_structure() {
-    log "Creating NSS-only directory structure"
+    log "Creating FHS-compliant directory structure for role: ${SIGUL_ROLE}"
 
-    # Create base directories
-    local dirs=(
-        "$SIGUL_BASE_DIR"
-        "$NSS_BASE_DIR"
-        "$SECRETS_DIR"
+    # Create base directories (FHS-compliant)
+    local base_dirs=(
         "$CONFIG_DIR"
+        "$NSS_BASE_DIR"
+        "$DATA_BASE_DIR"
         "$LOGS_DIR"
-        "$DB_DIR"
-        "$GNUPG_DIR"
+        "$RUN_DIR"
+        "$SECRETS_DIR"
         "$CA_EXPORT_DIR"
         "$CA_IMPORT_DIR"
     )
 
-    for dir in "${dirs[@]}"; do
+    for dir in "${base_dirs[@]}"; do
         if [[ ! -d "$dir" ]]; then
-            mkdir -p "$dir"
-            debug "Created directory: $dir"
-        fi
-        # Ensure proper ownership for mounted volumes and special directories
-        if [[ "$dir" == "$CA_EXPORT_DIR" ]] || [[ "$dir" == "$CA_IMPORT_DIR" ]]; then
-            chmod 755 "$dir" 2>/dev/null || true
-            debug "Set permissions for shared directory: $dir"
-        elif [[ "$dir" == "$GNUPG_DIR" ]]; then
-            chmod 700 "$dir" 2>/dev/null || true
-            debug "Set secure permissions for GPG directory: $dir"
-        elif [[ "$dir" == "$DB_DIR" ]]; then
             mkdir -p "$dir" 2>/dev/null || true
-            chmod 755 "$dir" 2>/dev/null || true
-            debug "Set permissions for database directory: $dir"
+            debug "Created base directory: $dir"
         fi
     done
 
-    # Create component-specific NSS directories
-    local components=("bridge" "server" "client")
-    for component in "${components[@]}"; do
-        local nss_component_dir="$NSS_BASE_DIR/$component"
-        if [[ ! -d "$nss_component_dir" ]]; then
-            mkdir -p "$nss_component_dir"
-            debug "Created NSS directory: $nss_component_dir"
-        fi
-    done
+    # Create role-specific directories
+    if [[ -n "${SIGUL_ROLE}" ]]; then
+        local role_dirs=(
+            "$NSS_BASE_DIR/${SIGUL_ROLE}"
+            "$DATA_BASE_DIR/${SIGUL_ROLE}"
+            "$LOGS_DIR/${SIGUL_ROLE}"
+            "$RUN_DIR/${SIGUL_ROLE}"
+        )
 
-    success "Directory structure created"
+        for dir in "${role_dirs[@]}"; do
+            if [[ ! -d "$dir" ]]; then
+                mkdir -p "$dir" 2>/dev/null || true
+                debug "Created role-specific directory: $dir"
+            fi
+        done
+
+        # Set special permissions for specific directories
+        if [[ "${SIGUL_ROLE}" == "server" ]]; then
+            # GPG directory needs restrictive permissions
+            mkdir -p "$GNUPG_DIR" 2>/dev/null || true
+            chmod 700 "$GNUPG_DIR" 2>/dev/null || true
+            debug "Set secure permissions for GPG directory: $GNUPG_DIR"
+        fi
+    fi
+
+    # Set permissions for shared directories
+    chmod 755 "$CA_EXPORT_DIR" 2>/dev/null || true
+    chmod 755 "$CA_IMPORT_DIR" 2>/dev/null || true
+    chmod 755 "$SECRETS_DIR" 2>/dev/null || true
+    debug "Set permissions for shared directories"
+
+    success "FHS-compliant directory structure created"
 }
 
 generate_nss_password() {
@@ -221,8 +230,8 @@ import_ca_private_key() {
     local component="$1"
     local nss_dir="$NSS_BASE_DIR/$component"
     local password_file="$SECRETS_DIR/nss-password"
-    local ca_p12_file="/var/sigul/bridge-shared/ca-export/bridge-ca.p12"
-    local ca_p12_password_file="/var/sigul/bridge-shared/ca-export/ca-p12-password"
+    local ca_p12_file="/etc/pki/sigul/bridge-shared/ca-export/bridge-ca.p12"
+    local ca_p12_password_file="/etc/pki/sigul/bridge-shared/ca-export/ca-p12-password"
 
     log "Importing CA private key for $component"
 
@@ -279,7 +288,7 @@ generate_component_certificate() {
 
     # Generate certificate with component-specific trust flags
     local trust_flags="u,u,u"
-    
+
     # Set appropriate trust flags based on component
     if [[ "$component" == "client" ]]; then
         # Client certificates need user trust for SSL client authentication
@@ -287,7 +296,7 @@ generate_component_certificate() {
         debug "Generating client certificate for SSL client authentication"
     elif [[ "$component" == "bridge" ]]; then
         # Bridge certificates need SSL server trust
-        trust_flags="u,u,u" 
+        trust_flags="u,u,u"
         debug "Generating bridge certificate for SSL server authentication"
     elif [[ "$component" == "server" ]]; then
         # Server certificates need user trust
@@ -298,7 +307,7 @@ generate_component_certificate() {
     if certutil -S -d "sql:$nss_dir" -n "$cert_nickname" -s "$subject" -c "$CA_NICKNAME" \
         -t "$trust_flags" -f "$password_file" -k rsa -g 2048 -z "$entropy_file" >/dev/null 2>&1; then
         success "Certificate generated: $cert_nickname"
-        
+
         # For client certificates, set additional trust flags for SSL client auth
         if [[ "$component" == "client" ]]; then
             # Ensure the CA is trusted for SSL client certificate validation
@@ -406,7 +415,7 @@ setup_bridge_ca() {
 setup_server_certificates() {
     log "Setting up server certificates"
 
-    local ca_import_file="/var/sigul/bridge-shared/ca-export/bridge-ca.crt"
+    local ca_import_file="/etc/pki/sigul/bridge-shared/ca-export/bridge-ca.crt"
 
     # Wait for CA from bridge
     local max_attempts=30
@@ -446,7 +455,7 @@ setup_server_certificates() {
 setup_client_certificates() {
     log "Setting up client certificates"
 
-    local ca_import_file="/var/sigul/bridge-shared/ca-export/bridge-ca.crt"
+    local ca_import_file="/etc/pki/sigul/bridge-shared/ca-export/bridge-ca.crt"
 
     # Wait for CA from bridge
     local max_attempts=30

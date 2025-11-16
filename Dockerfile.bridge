@@ -74,15 +74,16 @@ RUN if getent passwd sigul >/dev/null; then \
     # Create group first with GID 1000
     groupadd -g 1000 sigul && \
     # Create user with UID 1000 and GID 1000
-    useradd -r -u 1000 -g 1000 -d /var/sigul -s /bin/bash sigul && \
-    # Create unified sigul directory structure under /var/sigul
-    mkdir -p /var/sigul && \
-    chown sigul:sigul /var/sigul && \
-    chmod 755 /var/sigul && \
-    # Create /var/lib/sigul directory for NSS databases and GPG
-    mkdir -p /var/lib/sigul && \
-    chown sigul:sigul /var/lib/sigul && \
-    chmod 755 /var/lib/sigul && \
+    useradd -r -u 1000 -g 1000 -d /var/lib/sigul -s /bin/bash sigul && \
+    # Create FHS-compliant directory structure
+    mkdir -p /etc/sigul && \
+    mkdir -p /etc/pki/sigul/bridge && \
+    mkdir -p /var/lib/sigul/bridge && \
+    mkdir -p /var/log/sigul/bridge && \
+    mkdir -p /run/sigul/bridge && \
+    chown -R sigul:sigul /etc/sigul /etc/pki/sigul /var/lib/sigul /var/log/sigul /run/sigul && \
+    chmod 755 /etc/sigul /etc/pki/sigul /var/lib/sigul /var/log/sigul /run/sigul && \
+    chmod 755 /etc/pki/sigul/bridge /var/lib/sigul/bridge /var/log/sigul/bridge /run/sigul/bridge && \
     # Set proper permissions on PKI files after user creation
     # Only chmod files that exist (some are generated at runtime)
     if ls /workspace/pki/*.crt >/dev/null 2>&1; then chmod 644 /workspace/pki/*.crt; fi && \
@@ -93,13 +94,9 @@ RUN if getent passwd sigul >/dev/null; then \
     chown -R sigul:sigul /workspace/pki/
 
 # Set working directory
-WORKDIR /var/sigul
+WORKDIR /var/lib/sigul/bridge
 
-# Switch to sigul user
-# Fix log and PID file permissions - create directories with proper ownership
-RUN mkdir -p /var/log /var/run && \
-    chown sigul:sigul /var/log /var/run && \
-    chmod 755 /var/log /var/run
+# Switch to sigul user (directories already created with proper ownership above)
 
 USER sigul
 
@@ -108,6 +105,6 @@ CMD ["/usr/local/bin/sigul-init.sh", "--role", "bridge", "--start-service"]
 
 # Health check - NSS-based certificate validation with process check
 HEALTHCHECK --interval=45s --timeout=15s --start-period=120s --retries=5 \
-    CMD certutil -d sql:/var/sigul/nss/bridge -L -n sigul-ca >/dev/null 2>&1 && \
-        certutil -d sql:/var/sigul/nss/bridge -L -n sigul-bridge-cert >/dev/null 2>&1 && \
+    CMD certutil -d sql:/etc/pki/sigul/bridge -L -n sigul-ca >/dev/null 2>&1 && \
+        certutil -d sql:/etc/pki/sigul/bridge -L -n sigul-bridge-cert >/dev/null 2>&1 && \
         pgrep -f "sigul_bridge" >/dev/null 2>&1 || exit 1

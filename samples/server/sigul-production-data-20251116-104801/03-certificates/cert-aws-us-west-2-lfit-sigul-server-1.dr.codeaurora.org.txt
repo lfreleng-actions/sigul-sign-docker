@@ -1,0 +1,191 @@
+==========================================
+Certificate Nickname: aws-us-west-2-lfit-sigul-server-1.dr.codeaurora.org
+==========================================
+
+=== NSS Format (certutil) ===
+Certificate:
+    Data:
+        Version: 3 (0x2)
+        Serial Number:
+            00:e9:e6:e3:06:07:53:0d:a3:ea:4c:61:19:86:9a:15:
+            06
+        Signature Algorithm: PKCS #1 SHA-256 With RSA Encryption
+        Issuer: "CN=EasyRSA"
+        Validity:
+            Not Before: Wed Mar 03 19:04:52 2021
+            Not After : Sat Mar 01 19:04:52 2031
+        Subject: "CN=aws-us-west-2-lfit-sigul-server-1.dr.codeaurora.org"
+        Subject Public Key Info:
+            Public Key Algorithm: PKCS #1 RSA Encryption
+            RSA Public Key:
+                Modulus:
+                    b2:09:11:c3:4f:65:60:c4:74:83:3f:70:44:eb:9c:2d:
+                    3e:70:6c:b4:e5:35:94:49:c9:25:ee:cb:06:51:e4:d3:
+                    de:06:09:72:29:93:71:b3:22:78:eb:c5:72:d0:46:eb:
+                    dc:5c:06:2e:bb:63:26:b0:16:8e:f0:5d:9f:f3:c3:c5:
+                    ea:ea:ab:1e:2e:24:6f:07:8e:34:8d:60:16:fb:18:df:
+                    32:51:20:36:28:86:6a:69:b2:80:a4:3a:3c:04:1e:67:
+                    63:dd:68:9f:5e:0d:4d:d6:55:ec:48:a7:4c:58:56:66:
+                    b7:3f:f4:b0:78:0b:7e:66:e3:68:a8:18:3f:12:91:2f:
+                    89:5d:7f:a0:35:fb:cf:e0:8e:c8:54:5a:f5:b7:8c:28:
+                    3f:56:2c:84:d9:30:8f:60:00:70:02:0c:42:06:19:24:
+                    8f:a3:ed:1f:66:bf:42:08:ac:da:99:28:f7:81:ff:0c:
+                    0f:85:e7:33:b8:b6:8a:f2:60:15:94:18:d1:06:52:7b:
+                    ad:eb:05:40:12:9c:9b:5a:6a:c1:cb:89:4a:f9:ad:67:
+                    85:fc:cd:cb:11:69:df:e2:c4:7b:67:fb:31:d9:3c:37:
+                    f5:a6:0c:35:06:ae:70:a3:46:98:c8:ee:44:ab:25:ef:
+                    9d:62:52:a6:b7:eb:71:93:55:85:e4:40:86:69:aa:c5
+                Exponent: 65537 (0x10001)
+        Signed Extensions:
+            Name: Certificate Basic Constraints
+            Data: Is not a CA.
+
+            Name: Certificate Subject Key ID
+            Data:
+                04:51:d5:0a:6e:14:ef:a0:a5:17:a3:a0:ef:5b:9d:4c:
+                b4:b5:e9:38
+
+            Name: Certificate Authority Key Identifier
+            Key ID:
+                b3:8c:6e:5d:8b:8d:db:41:f8:ed:16:94:ab:7a:05:3a:
+                46:f4:07:24
+            Issuer:
+                Directory Name: "CN=EasyRSA"
+            Serial Number:
+                00:da:99:94:06:33:56:82:24
+
+            Name: Extended Key Usage
+                TLS Web Server Authentication Certificate
+                TLS Web Client Authentication Certificate
+
+            Name: Certificate Key Usage
+            Usages: Digital Signature
+                    Key Encipherment
+
+            Name: Certificate Subject Alt Name
+            DNS name: "aws-us-west-2-lfit-sigul-server-1.dr.codeaurora.org"
+
+    Signature Algorithm: PKCS #1 SHA-256 With RSA Encryption
+    Signature:
+        01:33:19:e3:6c:4a:5c:13:c3:07:fe:14:c3:ea:39:5c:
+        ea:04:06:22:de:d1:74:8f:06:af:35:59:3f:ff:78:2c:
+        a9:e4:46:27:d4:07:61:b7:a4:fd:68:9c:d9:99:3f:b9:
+        92:e0:f5:8d:63:d2:51:d2:39:b8:a9:91:c1:8e:d5:b0:
+        27:63:9b:c5:ea:24:f3:40:d9:64:11:78:32:94:73:53:
+        d4:7c:e9:81:6d:05:73:bb:0b:fc:6a:e1:f3:89:c8:ca:
+        59:86:b3:e6:77:35:77:57:6b:91:97:af:f8:1e:a5:2f:
+        1d:96:9f:38:3b:b1:f0:a4:59:41:9b:29:8f:fd:f8:66:
+        79:64:cd:19:e5:a3:40:8d:e7:bd:0c:2d:e1:a2:38:0c:
+        c9:c8:dd:b7:b8:fe:4d:d0:0e:05:81:73:81:c9:4c:45:
+        56:1e:e5:09:2e:4d:3c:c5:f8:ae:3c:2a:f0:aa:e6:20:
+        d3:fb:5d:ba:91:b0:2f:37:1e:d7:89:cc:96:8a:6f:03:
+        a5:6f:bb:33:be:42:82:34:00:4e:07:8c:c7:65:2d:db:
+        58:cd:88:11:e6:55:97:6b:a9:62:04:99:08:2a:79:af:
+        9d:3a:04:6c:70:33:46:68:6a:cd:e6:c2:5f:cb:51:d6:
+        d4:fb:d9:a4:fc:d7:d3:29:7b:6f:38:13:07:30:14:cb
+    Fingerprint (SHA-256):
+        C9:9C:3E:D4:F1:C0:7C:BA:F9:A9:DD:D2:D5:8A:08:CE:C5:20:E9:EC:BD:D8:F7:78:D5:E9:F3:A5:52:BE:2E:E6
+    Fingerprint (SHA1):
+        3F:25:95:B3:8A:37:25:EE:21:F8:01:D8:D7:B4:27:37:D5:BB:1B:1B
+
+    Mozilla-CA-Policy: false (attribute missing)
+    Certificate Trust Flags:
+        SSL Flags:
+            User
+        Email Flags:
+            User
+        Object Signing Flags:
+            User
+
+
+=== OpenSSL Detailed Format ===
+Certificate:
+    Data:
+        Version: 3 (0x2)
+        Serial Number:
+            e9:e6:e3:06:07:53:0d:a3:ea:4c:61:19:86:9a:15:06
+    Signature Algorithm: sha256WithRSAEncryption
+        Issuer: CN=EasyRSA
+        Validity
+            Not Before: Mar  3 19:04:52 2021 GMT
+            Not After : Mar  1 19:04:52 2031 GMT
+        Subject: CN=aws-us-west-2-lfit-sigul-server-1.dr.codeaurora.org
+        Subject Public Key Info:
+            Public Key Algorithm: rsaEncryption
+                Public-Key: (2048 bit)
+                Modulus:
+                    00:b2:09:11:c3:4f:65:60:c4:74:83:3f:70:44:eb:
+                    9c:2d:3e:70:6c:b4:e5:35:94:49:c9:25:ee:cb:06:
+                    51:e4:d3:de:06:09:72:29:93:71:b3:22:78:eb:c5:
+                    72:d0:46:eb:dc:5c:06:2e:bb:63:26:b0:16:8e:f0:
+                    5d:9f:f3:c3:c5:ea:ea:ab:1e:2e:24:6f:07:8e:34:
+                    8d:60:16:fb:18:df:32:51:20:36:28:86:6a:69:b2:
+                    80:a4:3a:3c:04:1e:67:63:dd:68:9f:5e:0d:4d:d6:
+                    55:ec:48:a7:4c:58:56:66:b7:3f:f4:b0:78:0b:7e:
+                    66:e3:68:a8:18:3f:12:91:2f:89:5d:7f:a0:35:fb:
+                    cf:e0:8e:c8:54:5a:f5:b7:8c:28:3f:56:2c:84:d9:
+                    30:8f:60:00:70:02:0c:42:06:19:24:8f:a3:ed:1f:
+                    66:bf:42:08:ac:da:99:28:f7:81:ff:0c:0f:85:e7:
+                    33:b8:b6:8a:f2:60:15:94:18:d1:06:52:7b:ad:eb:
+                    05:40:12:9c:9b:5a:6a:c1:cb:89:4a:f9:ad:67:85:
+                    fc:cd:cb:11:69:df:e2:c4:7b:67:fb:31:d9:3c:37:
+                    f5:a6:0c:35:06:ae:70:a3:46:98:c8:ee:44:ab:25:
+                    ef:9d:62:52:a6:b7:eb:71:93:55:85:e4:40:86:69:
+                    aa:c5
+                Exponent: 65537 (0x10001)
+        X509v3 extensions:
+            X509v3 Basic Constraints:
+                CA:FALSE
+            X509v3 Subject Key Identifier:
+                04:51:D5:0A:6E:14:EF:A0:A5:17:A3:A0:EF:5B:9D:4C:B4:B5:E9:38
+            X509v3 Authority Key Identifier:
+                keyid:B3:8C:6E:5D:8B:8D:DB:41:F8:ED:16:94:AB:7A:05:3A:46:F4:07:24
+                DirName:/CN=EasyRSA
+                serial:DA:99:94:06:33:56:82:24
+
+            X509v3 Extended Key Usage:
+                TLS Web Server Authentication, TLS Web Client Authentication
+            X509v3 Key Usage:
+                Digital Signature, Key Encipherment
+            X509v3 Subject Alternative Name:
+                DNS:aws-us-west-2-lfit-sigul-server-1.dr.codeaurora.org
+    Signature Algorithm: sha256WithRSAEncryption
+         01:33:19:e3:6c:4a:5c:13:c3:07:fe:14:c3:ea:39:5c:ea:04:
+         06:22:de:d1:74:8f:06:af:35:59:3f:ff:78:2c:a9:e4:46:27:
+         d4:07:61:b7:a4:fd:68:9c:d9:99:3f:b9:92:e0:f5:8d:63:d2:
+         51:d2:39:b8:a9:91:c1:8e:d5:b0:27:63:9b:c5:ea:24:f3:40:
+         d9:64:11:78:32:94:73:53:d4:7c:e9:81:6d:05:73:bb:0b:fc:
+         6a:e1:f3:89:c8:ca:59:86:b3:e6:77:35:77:57:6b:91:97:af:
+         f8:1e:a5:2f:1d:96:9f:38:3b:b1:f0:a4:59:41:9b:29:8f:fd:
+         f8:66:79:64:cd:19:e5:a3:40:8d:e7:bd:0c:2d:e1:a2:38:0c:
+         c9:c8:dd:b7:b8:fe:4d:d0:0e:05:81:73:81:c9:4c:45:56:1e:
+         e5:09:2e:4d:3c:c5:f8:ae:3c:2a:f0:aa:e6:20:d3:fb:5d:ba:
+         91:b0:2f:37:1e:d7:89:cc:96:8a:6f:03:a5:6f:bb:33:be:42:
+         82:34:00:4e:07:8c:c7:65:2d:db:58:cd:88:11:e6:55:97:6b:
+         a9:62:04:99:08:2a:79:af:9d:3a:04:6c:70:33:46:68:6a:cd:
+         e6:c2:5f:cb:51:d6:d4:fb:d9:a4:fc:d7:d3:29:7b:6f:38:13:
+         07:30:14:cb
+
+=== PEM Format ===
+-----BEGIN CERTIFICATE-----
+MIIDuTCCAqGgAwIBAgIRAOnm4wYHUw2j6kxhGYaaFQYwDQYJKoZIhvcNAQELBQAw
+EjEQMA4GA1UEAwwHRWFzeVJTQTAeFw0yMTAzMDMxOTA0NTJaFw0zMTAzMDExOTA0
+NTJaMD4xPDA6BgNVBAMMM2F3cy11cy13ZXN0LTItbGZpdC1zaWd1bC1zZXJ2ZXIt
+MS5kci5jb2RlYXVyb3JhLm9yZzCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoC
+ggEBALIJEcNPZWDEdIM/cETrnC0+cGy05TWUSckl7ssGUeTT3gYJcimTcbMieOvF
+ctBG69xcBi67YyawFo7wXZ/zw8Xq6qseLiRvB440jWAW+xjfMlEgNiiGammygKQ6
+PAQeZ2PdaJ9eDU3WVexIp0xYVma3P/SweAt+ZuNoqBg/EpEviV1/oDX7z+COyFRa
+9beMKD9WLITZMI9gAHACDEIGGSSPo+0fZr9CCKzamSj3gf8MD4XnM7i2ivJgFZQY
+0QZSe63rBUASnJtaasHLiUr5rWeF/M3LEWnf4sR7Z/sx2Tw39aYMNQaucKNGmMju
+RKsl751iUqa363GTVYXkQIZpqsUCAwEAAaOB3TCB2jAJBgNVHRMEAjAAMB0GA1Ud
+DgQWBBQEUdUKbhTvoKUXo6DvW51MtLXpODBCBgNVHSMEOzA5gBSzjG5di43bQfjt
+FpSregU6RvQHJKEWpBQwEjEQMA4GA1UEAwwHRWFzeVJTQYIJANqZlAYzVoIkMB0G
+A1UdJQQWMBQGCCsGAQUFBwMBBggrBgEFBQcDAjALBgNVHQ8EBAMCBaAwPgYDVR0R
+BDcwNYIzYXdzLXVzLXdlc3QtMi1sZml0LXNpZ3VsLXNlcnZlci0xLmRyLmNvZGVh
+dXJvcmEub3JnMA0GCSqGSIb3DQEBCwUAA4IBAQABMxnjbEpcE8MH/hTD6jlc6gQG
+It7RdI8GrzVZP/94LKnkRifUB2G3pP1onNmZP7mS4PWNY9JR0jm4qZHBjtWwJ2Ob
+xeok80DZZBF4MpRzU9R86YFtBXO7C/xq4fOJyMpZhrPmdzV3V2uRl6/4HqUvHZaf
+ODux8KRZQZspj/34ZnlkzRnlo0CN570MLeGiOAzJyN23uP5N0A4FgXOByUxFVh7l
+CS5NPMX4rjwq8KrmINP7XbqRsC83HteJzJaKbwOlb7szvkKCNABOB4zHZS3bWM2I
+EeZVl2upYgSZCCp5r506BGxwM0Zoas3mwl/LUdbU+9mk/NfTKXtvOBMHMBTL
+-----END CERTIFICATE-----

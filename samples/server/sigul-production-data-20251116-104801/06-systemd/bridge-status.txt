@@ -1,0 +1,2 @@
+=== Sigul Bridge Status ===
+Bridge not running

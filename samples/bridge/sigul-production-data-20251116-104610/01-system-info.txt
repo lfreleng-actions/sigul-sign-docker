@@ -1,0 +1,104 @@
+### OS Release
+NAME="CentOS Linux"
+VERSION="7 (Core)"
+ID="centos"
+ID_LIKE="rhel fedora"
+VERSION_ID="7"
+PRETTY_NAME="CentOS Linux 7 (Core)"
+ANSI_COLOR="0;31"
+CPE_NAME="cpe:/o:centos:centos:7"
+HOME_URL="https://www.centos.org/"
+BUG_REPORT_URL="https://bugs.centos.org/"
+
+CENTOS_MANTISBT_PROJECT="CentOS-7"
+CENTOS_MANTISBT_PROJECT_VERSION="7"
+REDHAT_SUPPORT_PRODUCT="centos"
+REDHAT_SUPPORT_PRODUCT_VERSION="7"
+
+SUCCESS
+
+### Kernel Version
+Linux aws-us-west-2-lfit-sigul-bridge-1.dr.codeaurora.org 3.10.0-1160.95.1.el7.x86_64 #1 SMP Mon Jul 24 13:59:37 UTC 2023 x86_64 x86_64 x86_64 GNU/Linux
+SUCCESS
+
+### Python Version
+Python 2.7.5
+SUCCESS
+
+### Python3 Version (if available)
+./script.sh: line 49: python3: command not found
+FAILED or NOT FOUND
+
+### Hostname
+aws-us-west-2-lfit-sigul-bridge-1.dr.codeaurora.org
+SUCCESS
+
+### Uptime
+ 10:46:10 up 800 days,  2:28,  3 users,  load average: 0.00, 0.04, 0.05
+SUCCESS
+
+### SELinux Status
+SELinux status:                 enabled
+SELinuxfs mount:                /sys/fs/selinux
+SELinux root directory:         /etc/selinux
+Loaded policy name:             targeted
+Current mode:                   enforcing
+Mode from config file:          enforcing
+Policy MLS status:              enabled
+Policy deny_unknown status:     allowed
+Max kernel policy version:      31
+SUCCESS
+
+### Installed Sigul Packages
+sigul-0.207-1.el7.x86_64
+sigul-bridge-0.207-1.el7.x86_64
+### Installed NSS Packages
+nss-sysinit-3.90.0-2.el7_9.x86_64
+pyOpenSSL-0.13.1-4.el7.x86_64
+nss-util-3.90.0-1.el7_9.x86_64
+nss-softokn-3.90.0-6.el7_9.x86_64
+openssh-7.4p1-23.el7_9.x86_64
+openssl-1.0.2k-26.el7_9.x86_64
+python-nss-0.16.0-3.el7.x86_64
+nss-softokn-freebl-3.90.0-6.el7_9.x86_64
+nss-tools-3.90.0-2.el7_9.x86_64
+openssl-libs-1.0.2k-26.el7_9.x86_64
+openssh-server-7.4p1-23.el7_9.x86_64
+nss-pem-1.0.3-7.el7_9.1.x86_64
+openssh-clients-7.4p1-23.el7_9.x86_64
+jansson-2.10-1.el7.x86_64
+nss-3.90.0-2.el7_9.x86_64
+python-nss-0.16.0-3.el7.x86_64
+### GPG Version
+gpg (GnuPG) 2.0.22
+libgcrypt 1.5.3
+Copyright (C) 2013 Free Software Foundation, Inc.
+License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>
+This is free software: you are free to change and redistribute it.
+There is NO WARRANTY, to the extent permitted by law.
+
+Home: ~/.gnupg
+Supported algorithms:
+Pubkey: RSA, ?, ?, ELG, DSA
+Cipher: IDEA, 3DES, CAST5, BLOWFISH, AES, AES192, AES256, TWOFISH,
+        CAMELLIA128, CAMELLIA192, CAMELLIA256
+Hash: MD5, SHA1, RIPEMD160, SHA256, SHA384, SHA512, SHA224
+Compression: Uncompressed, ZIP, ZLIB, BZIP2
+SUCCESS
+
+### GPG2 Version (if available)
+gpg (GnuPG) 2.0.22
+libgcrypt 1.5.3
+Copyright (C) 2013 Free Software Foundation, Inc.
+License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>
+This is free software: you are free to change and redistribute it.
+There is NO WARRANTY, to the extent permitted by law.
+
+Home: ~/.gnupg
+Supported algorithms:
+Pubkey: RSA, ?, ?, ELG, DSA
+Cipher: IDEA, 3DES, CAST5, BLOWFISH, AES, AES192, AES256, TWOFISH,
+        CAMELLIA128, CAMELLIA192, CAMELLIA256
+Hash: MD5, SHA1, RIPEMD160, SHA256, SHA384, SHA512, SHA224
+Compression: Uncompressed, ZIP, ZLIB, BZIP2
+SUCCESS

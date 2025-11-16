@@ -1,0 +1,6 @@
+=== Database File Information ===
+-rw-r--r--. 1 sigul sigul 12K Feb  8  2022 /var/lib/sigul/server.sqlite
+
+/var/lib/sigul/server.sqlite: SQLite 3.x database
+
+Size: 12K

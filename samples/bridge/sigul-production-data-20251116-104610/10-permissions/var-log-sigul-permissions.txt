@@ -1,0 +1,6 @@
+=== /var/log/sigul* Permissions ===
+-rw-r--r--. root root system_u:object_r:sigul_log_t:s0 /var/log/sigul_bridge.log
+-rw-r--r--. root root system_u:object_r:sigul_log_t:s0 /var/log/sigul_bridge.log-20251026.gz
+-rw-r--r--. root root system_u:object_r:sigul_log_t:s0 /var/log/sigul_bridge.log-20251102.gz
+-rw-r--r--. root root system_u:object_r:sigul_log_t:s0 /var/log/sigul_bridge.log-20251109.gz
+-rw-r--r--. root root system_u:object_r:sigul_log_t:s0 /var/log/sigul_bridge.log-20251116.gz

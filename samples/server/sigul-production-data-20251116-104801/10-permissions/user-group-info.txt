@@ -1,0 +1,8 @@
+=== Sigul User Info ===
+uid=994(sigul) gid=991(sigul) groups=991(sigul)
+
+=== /etc/passwd entry ===
+sigul:x:994:991:Signing server or bridge:/var/lib/sigul:/sbin/nologin
+
+=== /etc/group entry ===
+sigul:x:991:

@@ -1,0 +1,105 @@
+=== Config Parser Import ===
+/usr/share/sigul/bridge.py:19:import ConfigParser
+/usr/share/sigul/utils.py:19:import ConfigParser
+
+=== Config Parser Usage (separator format) ===
+/usr/share/sigul/bridge.py-# Red Hat Author: Patrick Uiterwijk <puiterwijk@redhat.com>
+/usr/share/sigul/bridge.py-
+/usr/share/sigul/bridge.py:import ConfigParser
+/usr/share/sigul/bridge.py-import base64
+/usr/share/sigul/bridge.py-import binascii
+/usr/share/sigul/bridge.py-import errors
+/usr/share/sigul/bridge.py-import logging
+/usr/share/sigul/bridge.py-import os
+/usr/share/sigul/bridge.py-import signal
+/usr/share/sigul/bridge.py-import shutil
+/usr/share/sigul/bridge.py-import socket
+/usr/share/sigul/bridge.py-import sys
+/usr/share/sigul/bridge.py-import tempfile
+--
+/usr/share/sigul/bridge.py-                if group == '':
+/usr/share/sigul/bridge.py-                    group = None
+/usr/share/sigul/bridge.py:            except ConfigParser.NoOptionError:
+/usr/share/sigul/bridge.py-                group = None
+/usr/share/sigul/bridge.py-            self.koji_fas_groups[v] = group
+/usr/share/sigul/bridge.py-
+/usr/share/sigul/bridge.py-def create_listen_sock(config, port):
+/usr/share/sigul/bridge.py-    sock = nss.ssl.SSLSocket(nss.io.PR_AF_INET)
+/usr/share/sigul/bridge.py-    # FIXME? does this belong in a finished product?
+/usr/share/sigul/bridge.py-    sock.set_socket_option(nss.io.PR_SockOpt_Reuseaddr, True)
+/usr/share/sigul/bridge.py-    sock.set_ssl_option(nss.ssl.SSL_REQUEST_CERTIFICATE, True)
+/usr/share/sigul/bridge.py-    sock.set_ssl_option(nss.ssl.SSL_REQUIRE_CERTIFICATE, True)
+/usr/share/sigul/bridge.py-    try:
+--
+/usr/share/sigul/utils.py-# Red Hat Author: Patrick Uiterwijk <puiterwijk@redhat.com>
+/usr/share/sigul/utils.py-
+/usr/share/sigul/utils.py:import ConfigParser
+/usr/share/sigul/utils.py-import Queue
+/usr/share/sigul/utils.py-import base64
+/usr/share/sigul/utils.py-import datetime
+/usr/share/sigul/utils.py-import errno
+/usr/share/sigul/utils.py-import getpass
+/usr/share/sigul/utils.py-import grp
+/usr/share/sigul/utils.py-import json
+/usr/share/sigul/utils.py-import logging
+/usr/share/sigul/utils.py-import optparse
+/usr/share/sigul/utils.py-import os
+--
+/usr/share/sigul/utils.py-        defaults = {}
+/usr/share/sigul/utils.py-        self._add_defaults(defaults)
+/usr/share/sigul/utils.py:        parser = ConfigParser.RawConfigParser(defaults)
+/usr/share/sigul/utils.py-        sections = set()
+/usr/share/sigul/utils.py-        self._add_sections(sections)
+/usr/share/sigul/utils.py-        for s in sections:
+/usr/share/sigul/utils.py-            parser.add_section(s)
+/usr/share/sigul/utils.py-        config_paths = (os.path.join(settings.config_dir,
+/usr/share/sigul/utils.py-                                     self.default_config_file),
+/usr/share/sigul/utils.py-                        os.path.expanduser(config_file))
+/usr/share/sigul/utils.py-        files = parser.read(config_paths)
+/usr/share/sigul/utils.py-        if len(files) == 0:
+/usr/share/sigul/utils.py-            raise ConfigurationError('No configuration file found (tried %s)' %
+--
+/usr/share/sigul/utils.py-            self._read_configuration(parser)
+/usr/share/sigul/utils.py-        # ValueError is not handled by parser.getint()
+/usr/share/sigul/utils.py:        except (ConfigParser.Error, ValueError), e:
+/usr/share/sigul/utils.py-            raise ConfigurationError('Error reading configuration: %s' % str(e))
+/usr/share/sigul/utils.py-
+/usr/share/sigul/utils.py-    def _add_defaults(self, defaults):
+/usr/share/sigul/utils.py-        '''Add more default values to defaults.'''
+/usr/share/sigul/utils.py-        pass
+/usr/share/sigul/utils.py-
+/usr/share/sigul/utils.py-    def _add_sections(self, sections):
+/usr/share/sigul/utils.py-        '''Add more section names to sections.'''
+/usr/share/sigul/utils.py-        pass
+/usr/share/sigul/utils.py-
+--
+/usr/share/sigul/utils.py-        '''Set attributes depending on parser.
+/usr/share/sigul/utils.py-
+/usr/share/sigul/utils.py:        Raise ConfigParser.Error.
+/usr/share/sigul/utils.py-
+/usr/share/sigul/utils.py-        '''
+/usr/share/sigul/utils.py-        pass
+/usr/share/sigul/utils.py-
+/usr/share/sigul/utils.py-def optparse_add_batch_option(parser):
+/usr/share/sigul/utils.py-    '''Add --batch option to parser.'''
+/usr/share/sigul/utils.py-    parser.add_option('--batch', action='store_true',
+/usr/share/sigul/utils.py-                      help='Communicate in batch-friendly mode (omit prompts, '
+/usr/share/sigul/utils.py-                      'expect NUL-terminated input)')
+/usr/share/sigul/utils.py-    parser.set_defaults(batch=False)
+--
+/usr/share/sigul/utils.py-    else:
+/usr/share/sigul/utils.py-        config_path = global_config.koji_config
+/usr/share/sigul/utils.py:    parser = ConfigParser.ConfigParser()
+/usr/share/sigul/utils.py-    parser.read(('/etc/koji.conf', os.path.expanduser(config_path)))
+/usr/share/sigul/utils.py-    config = dict(parser.items('koji'))
+/usr/share/sigul/utils.py-    for opt in ('server', 'topurl'):
+/usr/share/sigul/utils.py-        if opt not in config:
+/usr/share/sigul/utils.py-            raise KojiError('Missing koji configuration option %s' % opt)
+/usr/share/sigul/utils.py-    for opt in ('cert', 'serverca'):
+/usr/share/sigul/utils.py-        if opt in config:
+/usr/share/sigul/utils.py-            config[opt] = os.path.expanduser(config[opt])
+/usr/share/sigul/utils.py-    if 'authtype' not in config:
+/usr/share/sigul/utils.py-        # We have no explicit authtype, try to be smart
+
+=== Config file reading patterns ===
+Not found

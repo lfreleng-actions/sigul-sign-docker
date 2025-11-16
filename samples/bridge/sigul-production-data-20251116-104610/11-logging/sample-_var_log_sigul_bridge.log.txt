@@ -1,0 +1,51 @@
+=== Last 50 lines of /var/log/sigul_bridge.log ===
+  File "/usr/share/sigul/bridge.py", line 1077, in handle_connection
+    client_sock.force_handshake()
+NSPRError: (PR_END_OF_FILE_ERROR) Encountered end of file.
+2025-11-16 10:44:53,870 INFO: Client with CN 'vex-sjc-oran-jenkins-sandbox-1.ci.codeaurora.org' connected
+2025-11-16 10:44:53,906 INFO: Request: 'key' = 'nagios-canary', 'op' = 'sign-text', 'user' = 'vex-sjc-oran-jenkins-sandbox-1.ci.codeaurora.org'
+2025-11-16 10:45:00,073 INFO: Client with CN 'vex-sjc-oran-jenkins-prod-1.ci.codeaurora.org' connected
+2025-11-16 10:45:00,114 INFO: Request: 'key' = 'nagios-canary', 'op' = 'sign-text', 'user' = 'vex-sjc-oran-jenkins-prod-1.ci.codeaurora.org'
+2025-11-16 10:45:00,468 INFO: NSPR I/O error: (PR_END_OF_FILE_ERROR) Encountered end of file.
+Traceback (most recent call last):
+  File "/usr/share/sigul/bridge.py", line 1252, in bridge_one_request
+    server_sock)
+  File "/usr/share/sigul/bridge.py", line 1077, in handle_connection
+    client_sock.force_handshake()
+NSPRError: (PR_END_OF_FILE_ERROR) Encountered end of file.
+2025-11-16 10:45:15,511 INFO: NSPR I/O error: (PR_END_OF_FILE_ERROR) Encountered end of file.
+Traceback (most recent call last):
+  File "/usr/share/sigul/bridge.py", line 1252, in bridge_one_request
+    server_sock)
+  File "/usr/share/sigul/bridge.py", line 1077, in handle_connection
+    client_sock.force_handshake()
+NSPRError: (PR_END_OF_FILE_ERROR) Encountered end of file.
+2025-11-16 10:45:23,880 INFO: Client with CN 'vex-sjc-oran-jenkins-sandbox-1.ci.codeaurora.org' connected
+2025-11-16 10:45:23,919 INFO: Request: 'key' = 'nagios-canary', 'op' = 'sign-text', 'user' = 'vex-sjc-oran-jenkins-sandbox-1.ci.codeaurora.org'
+2025-11-16 10:45:30,075 INFO: Client with CN 'vex-sjc-oran-jenkins-prod-1.ci.codeaurora.org' connected
+2025-11-16 10:45:30,109 INFO: Request: 'key' = 'nagios-canary', 'op' = 'sign-text', 'user' = 'vex-sjc-oran-jenkins-prod-1.ci.codeaurora.org'
+2025-11-16 10:45:30,454 INFO: NSPR I/O error: (PR_END_OF_FILE_ERROR) Encountered end of file.
+Traceback (most recent call last):
+  File "/usr/share/sigul/bridge.py", line 1252, in bridge_one_request
+    server_sock)
+  File "/usr/share/sigul/bridge.py", line 1077, in handle_connection
+    client_sock.force_handshake()
+NSPRError: (PR_END_OF_FILE_ERROR) Encountered end of file.
+2025-11-16 10:45:45,510 INFO: NSPR I/O error: (PR_END_OF_FILE_ERROR) Encountered end of file.
+Traceback (most recent call last):
+  File "/usr/share/sigul/bridge.py", line 1252, in bridge_one_request
+    server_sock)
+  File "/usr/share/sigul/bridge.py", line 1077, in handle_connection
+    client_sock.force_handshake()
+NSPRError: (PR_END_OF_FILE_ERROR) Encountered end of file.
+2025-11-16 10:45:53,900 INFO: Client with CN 'vex-sjc-oran-jenkins-sandbox-1.ci.codeaurora.org' connected
+2025-11-16 10:45:53,942 INFO: Request: 'key' = 'nagios-canary', 'op' = 'sign-text', 'user' = 'vex-sjc-oran-jenkins-sandbox-1.ci.codeaurora.org'
+2025-11-16 10:46:00,086 INFO: Client with CN 'vex-sjc-oran-jenkins-prod-1.ci.codeaurora.org' connected
+2025-11-16 10:46:00,121 INFO: Request: 'key' = 'nagios-canary', 'op' = 'sign-text', 'user' = 'vex-sjc-oran-jenkins-prod-1.ci.codeaurora.org'
+2025-11-16 10:46:00,464 INFO: NSPR I/O error: (PR_END_OF_FILE_ERROR) Encountered end of file.
+Traceback (most recent call last):
+  File "/usr/share/sigul/bridge.py", line 1252, in bridge_one_request
+    server_sock)
+  File "/usr/share/sigul/bridge.py", line 1077, in handle_connection
+    client_sock.force_handshake()
+NSPRError: (PR_END_OF_FILE_ERROR) Encountered end of file.

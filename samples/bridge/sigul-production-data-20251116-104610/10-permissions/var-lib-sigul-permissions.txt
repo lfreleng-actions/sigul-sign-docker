@@ -1,0 +1,5 @@
+=== /var/lib/sigul/ Permissions ===
+Directory not found
+
+=== /var/lib/sigul/gnupg/ Permissions ===
+Directory not found

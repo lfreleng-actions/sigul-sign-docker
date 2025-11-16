@@ -1,0 +1,10 @@
+=== Active Server Instances ===
+UNIT                                                          LOAD   ACTIVE SUB
+sigul_server@bridge-aws-us-west-2-lfit-sigul-bridge-1.service loaded active running Sigul vault server (template)
+
+LOAD   = Reflects whether the unit definition was properly loaded.
+ACTIVE = The high-level unit activation state, i.e. generalization of SUB.
+SUB    = The low-level unit activation state, values depend on unit type.
+
+1 loaded units listed.
+To show all installed unit files use 'systemctl list-unit-files'.

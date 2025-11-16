@@ -1,0 +1,8 @@
+=== Sigul Bridge Status ===
+● sigul_bridge.service - Sigul bridge server
+   Loaded: loaded (/usr/lib/systemd/system/sigul_bridge.service; enabled; vendor preset: disabled)
+   Active: active (running) since Fri 2025-06-13 18:04:19 UTC; 5 months 3 days ago
+     Docs: https://fedorahosted.org/sigul/
+ Main PID: 20038 (python)
+   CGroup: /system.slice/sigul_bridge.service
+           └─20038 /usr/bin/python /usr/share/sigul/bridge.py -v

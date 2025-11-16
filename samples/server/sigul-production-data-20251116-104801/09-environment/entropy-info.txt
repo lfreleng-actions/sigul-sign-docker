@@ -1,0 +1,15 @@
+=== Entropy Pool ===
+1327
+
+=== Entropy Daemons ===
+● haveged.service - Entropy Daemon based on the HAVEGE algorithm
+   Loaded: loaded (/usr/lib/systemd/system/haveged.service; enabled; vendor preset: disabled)
+  Drop-In: /etc/systemd/system/haveged.service.d
+           └─opts.conf
+   Active: active (running) since Fri 2023-09-08 08:26:41 UTC; 2 years 2 months ago
+     Docs: man:haveged(8)
+           http://www.issihosts.com/haveged/
+ Main PID: 611 (haveged)
+   CGroup: /system.slice/haveged.service
+           └─611 /usr/sbin/haveged --Foreground --verbose=1 -w 1024
+rngd not running

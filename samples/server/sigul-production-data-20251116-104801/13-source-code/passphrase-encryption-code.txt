@@ -1,0 +1,143 @@
+=== Passphrase Encryption Logic ===
+/usr/share/sigul/server_common.py-class KeyAccess(object):
+/usr/share/sigul/server_common.py-    def __init__(self, key, user, key_admin=False):
+/usr/share/sigul/server_common.py-        self.key = key
+/usr/share/sigul/server_common.py-        self.user = user
+/usr/share/sigul/server_common.py-        self.key_admin = key_admin
+/usr/share/sigul/server_common.py:        self.encrypted_passphrase = None
+/usr/share/sigul/server_common.py-
+/usr/share/sigul/server_common.py-    def get_passphrase(self, config, user_passphrase):
+/usr/share/sigul/server_common.py:        if self.encrypted_passphrase is None:
+/usr/share/sigul/server_common.py-            # Perform a decryption attempt anyway to make timing attacks more
+/usr/share/sigul/server_common.py-            # difficult.  gpg will probably choke on the attempt quickly
+/usr/share/sigul/server_common.py-            # enough, too bad.
+/usr/share/sigul/server_common.py:            encrypted_passphrase = 'x'
+/usr/share/sigul/server_common.py-        else:
+/usr/share/sigul/server_common.py:            encrypted_passphrase = self.encrypted_passphrase
+/usr/share/sigul/server_common.py-
+/usr/share/sigul/server_common.py-        try:
+/usr/share/sigul/server_common.py-            passphrase = gpg_decrypt(config,
+/usr/share/sigul/server_common.py:                                     encrypted_passphrase,
+/usr/share/sigul/server_common.py-                                     user_passphrase)
+/usr/share/sigul/server_common.py-        except gpgme.GpgmeError:
+/usr/share/sigul/server_common.py-            return None
+/usr/share/sigul/server_common.py-        passphrase = utils.unbind_passphrase(passphrase)
+/usr/share/sigul/server_common.py-        if passphrase is None:
+/usr/share/sigul/server_common.py-            logging.warning('Unable to unbind passphrase')
+/usr/share/sigul/server_common.py-        return passphrase
+/usr/share/sigul/server_common.py-
+/usr/share/sigul/server_common.py-    def set_passphrase(self, config, key_passphrase, user_passphrase,
+/usr/share/sigul/server_common.py-                       bind_params):
+/usr/share/sigul/server_common.py-        key_passphrase = utils.bind_passphrase(key_passphrase, bind_params)
+/usr/share/sigul/server_common.py:        self.encrypted_passphrase = gpg_encrypt_symmetric(config,
+/usr/share/sigul/server_common.py-                                                          key_passphrase,
+/usr/share/sigul/server_common.py-                                                          user_passphrase)
+/usr/share/sigul/server_common.py-
+/usr/share/sigul/server_common.py-sa = sqlalchemy
+/usr/share/sigul/server_common.py-_db_metadata = sa.MetaData()
+/usr/share/sigul/server_common.py-
+/usr/share/sigul/server_common.py-_db_users_table = sa.Table('users', _db_metadata,
+/usr/share/sigul/server_common.py-                           sa.Column('id', sa.Integer,
+/usr/share/sigul/server_common.py-                                     sa.Sequence('users_id_seq', optional=True),
+/usr/share/sigul/server_common.py-                                     primary_key=True),
+/usr/share/sigul/server_common.py-                           sa.Column('name', sa.Text, nullable=False,
+/usr/share/sigul/server_common.py-                                     unique=True),
+/usr/share/sigul/server_common.py-                           sa.Column('sha512_password', sa.Binary),
+/usr/share/sigul/server_common.py-                           sa.Column('admin', sa.Boolean, nullable=False))
+/usr/share/sigul/server_common.py-
+/usr/share/sigul/server_common.py-_db_keys_table = sa.Table('keys', _db_metadata,
+/usr/share/sigul/server_common.py-                          sa.Column('id', sa.Integer,
+/usr/share/sigul/server_common.py-                                    sa.Sequence('keys_id_seq', optional=True),
+/usr/share/sigul/server_common.py-                                    primary_key=True),
+/usr/share/sigul/server_common.py-                          sa.Column('name', sa.Text, nullable=False,
+--
+/usr/share/sigul/server_common.py-                                            sa.ForeignKey('keys.id'),
+/usr/share/sigul/server_common.py-                                            nullable=False),
+/usr/share/sigul/server_common.py-                                  sa.Column('user_id', sa.Integer,
+/usr/share/sigul/server_common.py-                                            sa.ForeignKey('users.id'),
+/usr/share/sigul/server_common.py-                                            nullable=False),
+/usr/share/sigul/server_common.py:                                  sa.Column('encrypted_passphrase', sa.Binary,
+/usr/share/sigul/server_common.py-                                            nullable=False),
+/usr/share/sigul/server_common.py-                                  sa.Column('key_admin', sa.Boolean,
+/usr/share/sigul/server_common.py-                                            nullable=False),
+/usr/share/sigul/server_common.py-                                  sa.UniqueConstraint('key_id', 'user_id'))
+/usr/share/sigul/server_common.py-del sa
+/usr/share/sigul/server_common.py-
+/usr/share/sigul/server_common.py-sa_orm = sqlalchemy.orm
+/usr/share/sigul/server_common.py-sa_orm.mapper(User, _db_users_table, properties={
+/usr/share/sigul/server_common.py-        'key_accesses': sa_orm.relation(KeyAccess, backref='user')
+/usr/share/sigul/server_common.py-        })
+/usr/share/sigul/server_common.py-sa_orm.mapper(Key, _db_keys_table, properties={
+/usr/share/sigul/server_common.py-        'key_accesses': sa_orm.relation(KeyAccess, backref='key')
+/usr/share/sigul/server_common.py-        })
+/usr/share/sigul/server_common.py-sa_orm.mapper(KeyAccess, _db_key_accesses_table)
+/usr/share/sigul/server_common.py-del sa_orm
+/usr/share/sigul/server_common.py-
+/usr/share/sigul/server_common.py-_db_engine = None
+/usr/share/sigul/server_common.py-def _db_get_engine(config):
+/usr/share/sigul/server_common.py-    '''Return _db_engine, setting it up if necessary.'''
+/usr/share/sigul/server_common.py-    global _db_engine
+--
+/usr/share/sigul/server_common.py-    if (not responder.passwd_cmd_sent or not responder.want_new_passphrase or
+/usr/share/sigul/server_common.py-        not responder.quit_cmd_sent):
+/usr/share/sigul/server_common.py-        logging.error('Unexpected state when changing GPG key password')
+/usr/share/sigul/server_common.py-        raise NotImplementedError()
+/usr/share/sigul/server_common.py-
+/usr/share/sigul/server_common.py:def gpg_encrypt_symmetric(config, cleartext, passphrase):
+/usr/share/sigul/server_common.py:    '''Return cleartext encrypted using passphrase.'''
+/usr/share/sigul/server_common.py-    ctx = _gpg_open(config)
+/usr/share/sigul/server_common.py-    _gpg_set_passphrase(ctx, passphrase)
+/usr/share/sigul/server_common.py-    data = cStringIO.StringIO()
+/usr/share/sigul/server_common.py-    ctx.encrypt(None, 0, cStringIO.StringIO(cleartext),
+/usr/share/sigul/server_common.py-                data)
+/usr/share/sigul/server_common.py-    return data.getvalue()
+/usr/share/sigul/server_common.py-
+/usr/share/sigul/server_common.py:def gpg_decrypt(config, ciphertext, passphrase):
+/usr/share/sigul/server_common.py:    '''Return ciphertext encrypted using passphrase.'''
+/usr/share/sigul/server_common.py-    ctx = _gpg_open(config)
+/usr/share/sigul/server_common.py-    _gpg_set_passphrase(ctx, passphrase)
+/usr/share/sigul/server_common.py-    data = cStringIO.StringIO()
+/usr/share/sigul/server_common.py-    ctx.decrypt(cStringIO.StringIO(ciphertext), data)
+/usr/share/sigul/server_common.py-    return data.getvalue()
+/usr/share/sigul/server_common.py-
+/usr/share/sigul/server_common.py-def gpg_signature(config, signature_file, cleartext_file, fingerprint,
+/usr/share/sigul/server_common.py-                  passphrase, armor):
+/usr/share/sigul/server_common.py-    '''Create a normal signature.
+/usr/share/sigul/server_common.py-
+/usr/share/sigul/server_common.py-    Sign contents of cleartext_file, write the signature to signature_file.
+/usr/share/sigul/server_common.py-    Use key with fingerprint and passphrase.
+/usr/share/sigul/server_common.py-
+/usr/share/sigul/server_common.py-    '''
+/usr/share/sigul/server_common.py-    ctx = _gpg_open(config)
+/usr/share/sigul/server_common.py-    _gpg_set_passphrase(ctx, passphrase)
+/usr/share/sigul/server_common.py-    key = ctx.get_key(fingerprint, True)
+/usr/share/sigul/server_common.py-    ctx.signers = (key,)
+/usr/share/sigul/server_common.py-    ctx.armor = armor
+/usr/share/sigul/server_common.py-    ctx.textmode = False
+--
+/usr/share/sigul/utils.py-    This allows a particular passphrase to be bound to multiple tokens at a
+/usr/share/sigul/utils.py-    single level.
+/usr/share/sigul/utils.py-    This is useful if you have multiple sigul servers: you would add the public
+/usr/share/sigul/utils.py-    keys for their tokens to the other servers to bind to, and then when you
+/usr/share/sigul/utils.py-    move the database to one of the other servers, they would still be able to
+/usr/share/sigul/utils.py:    decrypt bound passphrases.
+/usr/share/sigul/utils.py-    This mechanism is called Either-Or binding.
+/usr/share/sigul/utils.py-
+/usr/share/sigul/utils.py-    If the bind_params indicate this passphrase should not be bound, this
+/usr/share/sigul/utils.py-    will return the passphrase unmodified.
+/usr/share/sigul/utils.py-
+/usr/share/sigul/utils.py-    If the key is to be bound, the returned string is a json list with each
+/usr/share/sigul/utils.py-    entry an object string with at least two values:
+/usr/share/sigul/utils.py-    - method: the method used for binding (TPM, yubikey, ...)
+/usr/share/sigul/utils.py-    - value: the actual bound value
+/usr/share/sigul/utils.py-    More values can be added based on the binding method, like the TPM
+/usr/share/sigul/utils.py-    Endorsement Key public component to identify the TPM bound to.
+/usr/share/sigul/utils.py-    """
+/usr/share/sigul/utils.py-    if bind_params is None:
+/usr/share/sigul/utils.py-        # If we have no binding methods, just don't bind
+/usr/share/sigul/utils.py-        bind_params = []
+/usr/share/sigul/utils.py-
+/usr/share/sigul/utils.py-    for entry in bind_params:
+/usr/share/sigul/utils.py-        if not isinstance(entry, list):
+/usr/share/sigul/utils.py-            # This is probably the standard case.
+/usr/share/sigul/utils.py-            entry = [entry]

@@ -1,0 +1,5 @@
+=== gpg.conf (if exists) ===
+No gpg.conf file
+
+=== gpg-agent.conf (if exists) ===
+No gpg-agent.conf file

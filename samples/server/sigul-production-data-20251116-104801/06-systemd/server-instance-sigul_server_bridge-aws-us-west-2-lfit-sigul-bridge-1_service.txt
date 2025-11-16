@@ -1,0 +1,28 @@
+=== sigul_server@bridge-aws-us-west-2-lfit-sigul-bridge-1.service ===
+# /usr/lib/systemd/system/sigul_server@.service
+[Unit]
+Description=Sigul vault server (template)
+After=network.target
+Documentation=https://fedorahosted.org/sigul/
+
+[Service]
+ExecStart=/usr/sbin/sigul_server -c /etc/sigul/server-%i.conf --internal-log-dir=/var/log/sigul-%i --internal-pid-dir=/run/sigul-%i -v
+Type=simple
+Restart=on-failure
+RestartSec=5s
+StartLimitInterval=10
+StartLimitBurst=5
+
+[Install]
+WantedBy=multi-user.target
+
+=== Status ===
+● sigul_server@bridge-aws-us-west-2-lfit-sigul-bridge-1.service - Sigul vault server (template)
+   Loaded: loaded (/usr/lib/systemd/system/sigul_server@.service; enabled; vendor preset: disabled)
+   Active: active (running) since Wed 2025-05-21 03:32:48 UTC; 5 months 27 days ago
+     Docs: https://fedorahosted.org/sigul/
+ Main PID: 30077 (python)
+   CGroup: /system.slice/system-sigul_server.slice/sigul_server@bridge-aws-us-west-2-lfit-sigul-bridge-1.service
+           ├─ 9105 /usr/bin/python /usr/share/sigul/server.py -c /etc/sigul/server-bridge-aws-us-west-2-lfit-sigul-bridge-1.conf --internal-log-dir=/var/log/sigul-bridge-aws-us-west-2-lfit-sigul-bridge-1 --internal-pid-dir=/run/sigul-bridge-aws-us-west-2-lfit-sigul-bridge-1 -v
+           ├─ 9106 /usr/bin/python /usr/share/sigul/server.py -c /etc/sigul/server-bridge-aws-us-west-2-lfit-sigul-bridge-1.conf --internal-log-dir=/var/log/sigul-bridge-aws-us-west-2-lfit-sigul-bridge-1 --internal-pid-dir=/run/sigul-bridge-aws-us-west-2-lfit-sigul-bridge-1 -v
+           └─30077 /usr/bin/python /usr/share/sigul/server.py -c /etc/sigul/server-bridge-aws-us-west-2-lfit-sigul-bridge-1.conf --internal-log-dir=/var/log/sigul-bridge-aws-us-west-2-lfit-sigul-bridge-1 --internal-pid-dir=/run/sigul-bridge-aws-us-west-2-lfit-sigul-bridge-1 -v

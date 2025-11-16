@@ -1,0 +1,22 @@
+=== /var/lib/sigul/ Permissions ===
+drwx------. sigul sigul system_u:object_r:sigul_var_lib_t:s0 .
+drwxr-xr-x. root  root  system_u:object_r:var_lib_t:s0   ..
+-rw-------. sigul sigul unconfined_u:object_r:sigul_var_lib_t:s0 .bash_history
+drwx------. sigul sigul system_u:object_r:gpg_secret_t:s0 gnupg
+drwx------. sigul sigul unconfined_u:object_r:sigul_var_lib_t:s0 .gnupg
+drwx------. sigul sigul system_u:object_r:gpg_secret_t:s0 gnupg.pdx
+-rw-------. sigul sigul unconfined_u:object_r:sigul_var_lib_t:s0 .lesshst
+drwx------. root  root  system_u:object_r:unlabeled_t:s0 lost+found
+drwxr-xr-x. sigul sigul unconfined_u:object_r:sigul_var_lib_t:s0 old
+-rw-r--r--. sigul sigul unconfined_u:object_r:sigul_var_lib_t:s0 server.sqlite
+-rw-------. sigul sigul unconfined_u:object_r:sigul_var_lib_t:s0 .sqlite_history
+-rw-------. sigul sigul unconfined_u:object_r:sigul_var_lib_t:s0 .viminfo
+
+=== /var/lib/sigul/gnupg/ Permissions ===
+drwx------. sigul sigul system_u:object_r:gpg_secret_t:s0 .
+drwx------. sigul sigul system_u:object_r:sigul_var_lib_t:s0 ..
+-rw-------. sigul sigul system_u:object_r:gpg_secret_t:s0 pubring.gpg
+-rw-------. sigul sigul system_u:object_r:gpg_secret_t:s0 pubring.gpg~
+-rw-------. sigul sigul system_u:object_r:gpg_secret_t:s0 random_seed
+-rw-------. sigul sigul system_u:object_r:gpg_secret_t:s0 secring.gpg
+-rw-------. sigul sigul system_u:object_r:gpg_secret_t:s0 trustdb.gpg

@@ -1,0 +1,5 @@
+=== Bridge Journal (last 50 lines) ===
+-- No entries --
+
+=== Server Journal (last 50 lines) ===
+No journal entries

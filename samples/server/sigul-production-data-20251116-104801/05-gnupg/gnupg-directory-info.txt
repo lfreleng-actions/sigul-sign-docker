@@ -1,0 +1,17 @@
+=== GnuPG Directory Structure ===
+/var/lib/sigul/gnupg/:
+total 60
+drwx------. 2 sigul sigul  4096 Feb  8  2022 .
+drwx------. 7 sigul sigul  4096 Feb  8  2022 ..
+-rw-------. 1 sigul sigul  9205 Feb  8  2022 pubring.gpg
+-rw-------. 1 sigul sigul  9205 Feb  8  2022 pubring.gpg~
+-rw-------. 1 sigul sigul   600 Nov 16 10:48 random_seed
+-rw-------. 1 sigul sigul 17567 Feb  8  2022 secring.gpg
+-rw-------. 1 sigul sigul  1680 Feb  8  2022 trustdb.gpg
+
+=== File Types ===
+/var/lib/sigul/gnupg/secring.gpg: data
+/var/lib/sigul/gnupg/trustdb.gpg: GPG key trust database version 3
+/var/lib/sigul/gnupg/pubring.gpg~: GPG key public ring
+/var/lib/sigul/gnupg/pubring.gpg: GPG key public ring
+/var/lib/sigul/gnupg/random_seed: data

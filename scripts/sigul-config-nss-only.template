@@ -15,7 +15,10 @@
 #
 # Template Variables:
 #   ${SIGUL_ROLE}           - Component role (bridge|server|client)
-#   ${SIGUL_BASE_DIR}       - Base Sigul directory (/var/sigul)
+#   ${CONFIG_DIR}           - Configuration directory (/etc/sigul)
+#   ${NSS_BASE_DIR}         - NSS database base directory (/etc/pki/sigul)
+#   ${DATA_BASE_DIR}        - Data directory (/var/lib/sigul)
+#   ${LOGS_DIR}             - Log directory (/var/log/sigul)
 #   ${NSS_PASSWORD_FILE}    - NSS database password file path
 #   ${BRIDGE_HOSTNAME}      - Bridge hostname for connections
 #   ${BRIDGE_CLIENT_PORT}   - Bridge client port (44334)
@@ -27,7 +30,7 @@
 
 [bridge-server]
 # NSS database configuration
-nss-dir = sql:${SIGUL_BASE_DIR}/nss/bridge
+nss-dir = sql:${NSS_BASE_DIR}/bridge
 nss-password-file = ${NSS_PASSWORD_FILE}
 
 # Certificate nicknames (NSS-based)
@@ -46,11 +49,11 @@ max-file-payload-size = 67108864
 
 # Logging
 log-level = INFO
-log-file = ${SIGUL_BASE_DIR}/logs/bridge.log
+log-file = ${LOGS_DIR}/bridge/bridge.log
 
 [bridge-client]
 # NSS database configuration
-nss-dir = sql:${SIGUL_BASE_DIR}/nss/bridge
+nss-dir = sql:${NSS_BASE_DIR}/bridge
 nss-password-file = ${NSS_PASSWORD_FILE}
 
 # Certificate nicknames (NSS-based)
@@ -62,7 +65,7 @@ require-tls = true
 
 # Logging
 log-level = INFO
-log-file = ${SIGUL_BASE_DIR}/logs/bridge.log
+log-file = ${LOGS_DIR}/bridge/bridge.log
 
 #######################################
 # Server Configuration (NSS-Only)
@@ -70,10 +73,10 @@ log-file = ${SIGUL_BASE_DIR}/logs/bridge.log
 
 [server]
 # Database configuration
-database-path = ${SIGUL_BASE_DIR}/db/sigul.db
+database-path = ${DATA_BASE_DIR}/server/sigul.db
 
 # NSS database configuration
-nss-dir = sql:${SIGUL_BASE_DIR}/nss/server
+nss-dir = sql:${NSS_BASE_DIR}/server
 nss-password-file = ${NSS_PASSWORD_FILE}
 
 # Certificate nicknames (NSS-based)
@@ -88,11 +91,11 @@ bridge-port = ${BRIDGE_SERVER_PORT}
 require-tls = true
 
 # Key storage
-gnupg-home = ${SIGUL_BASE_DIR}/gnupg
+gnupg-home = ${DATA_BASE_DIR}/server/gnupg
 
 # Logging
 log-level = INFO
-log-file = ${SIGUL_BASE_DIR}/logs/server.log
+log-file = ${LOGS_DIR}/server/server.log
 
 #######################################
 # Client Configuration (NSS-Only)
@@ -100,7 +103,7 @@ log-file = ${SIGUL_BASE_DIR}/logs/server.log
 
 [client]
 # NSS database configuration
-nss-dir = sql:${SIGUL_BASE_DIR}/nss/client
+nss-dir = sql:${NSS_BASE_DIR}/client
 nss-password-file = ${NSS_PASSWORD_FILE}
 
 # Certificate nicknames (NSS-based)
@@ -119,7 +122,7 @@ user-name = ${SIGUL_ADMIN_USER}
 
 # Logging
 log-level = INFO
-log-file = ${SIGUL_BASE_DIR}/logs/client.log
+log-file = ${LOGS_DIR}/client/client.log
 
 #######################################
 # NSS Database Management
@@ -129,27 +132,31 @@ log-file = ${SIGUL_BASE_DIR}/logs/client.log
 # Commands used by setup scripts:
 #
 # Create NSS database:
-#   certutil -N -d sql:${SIGUL_BASE_DIR}/nss/${COMPONENT} -f ${NSS_PASSWORD_FILE}
+#   certutil -N -d sql:${NSS_BASE_DIR}/${COMPONENT} -f ${NSS_PASSWORD_FILE}
 #
 # Import CA certificate:
-#   certutil -A -d sql:${SIGUL_BASE_DIR}/nss/${COMPONENT} -n sigul-ca -t "CT,C,C" -i ${CA_CERT_FILE} -f ${NSS_PASSWORD_FILE}
+#   certutil -A -d sql:${NSS_BASE_DIR}/${COMPONENT} -n sigul-ca -t "CT,C,C" -i ${CA_CERT_FILE} -f ${NSS_PASSWORD_FILE}
 #
 # Generate component certificate:
-#   certutil -S -d sql:${SIGUL_BASE_DIR}/nss/${COMPONENT} -n sigul-${COMPONENT}-cert -s "CN=sigul-${COMPONENT}" -c sigul-ca -t "u,u,u" -f ${NSS_PASSWORD_FILE}
+#   certutil -S -d sql:${NSS_BASE_DIR}/${COMPONENT} -n sigul-${COMPONENT}-cert -s "CN=sigul-${COMPONENT}" -c sigul-ca -t "u,u,u" -f ${NSS_PASSWORD_FILE}
 #
 # List certificates:
-#   certutil -L -d sql:${SIGUL_BASE_DIR}/nss/${COMPONENT}
+#   certutil -L -d sql:${NSS_BASE_DIR}/${COMPONENT}
 #
 # Verify certificate:
-#   certutil -V -d sql:${SIGUL_BASE_DIR}/nss/${COMPONENT} -n sigul-${COMPONENT}-cert -u S -f ${NSS_PASSWORD_FILE}
+#   certutil -V -d sql:${NSS_BASE_DIR}/${COMPONENT} -n sigul-${COMPONENT}-cert -u S -f ${NSS_PASSWORD_FILE}
 
 #######################################
 # Directory Structure (NSS-Only)
 #######################################
 
-# Expected directory layout:
-# ${SIGUL_BASE_DIR}/
-# ├── nss/
+# Expected directory layout (FHS-compliant):
+# /etc/sigul/              # Configuration files
+# │   ├── bridge.conf      # Generated from this template
+# │   ├── server.conf      # Generated from this template
+# │   └── client.conf      # Generated from this template
+#
+# /etc/pki/sigul/          # NSS certificate databases
 # │   ├── bridge/          # Bridge NSS database
 # │   │   ├── cert9.db
 # │   │   ├── key4.db
@@ -162,19 +169,28 @@ log-file = ${SIGUL_BASE_DIR}/logs/client.log
 # │       ├── cert9.db
 # │       ├── key4.db
 # │       └── pkcs11.txt
-# ├── config/
-# │   ├── bridge.conf      # Generated from this template
-# │   ├── server.conf      # Generated from this template
-# │   └── client.conf      # Generated from this template
-# ├── secrets/
-# │   └── nss-password     # NSS database password
-# ├── logs/
-# │   ├── bridge.log
-# │   ├── server.log
-# │   └── client.log
-# ├── db/
-# │   └── sigul.db         # SQLite database
-# └── gnupg/               # GPG keyring directory
+#
+# /var/lib/sigul/          # Persistent data
+# │   ├── secrets/
+# │   │   └── nss-password # NSS database password
+# │   ├── bridge/
+# │   ├── server/
+# │   │   ├── gnupg/       # GPG keyring directory
+# │   │   └── sigul.db     # SQLite database
+# │   └── client/
+#
+# /var/log/sigul/          # Log files
+# │   ├── bridge/
+# │   │   └── bridge.log
+# │   ├── server/
+# │   │   └── server.log
+# │   └── client/
+# │       └── client.log
+#
+# /run/sigul/              # Runtime files (tmpfs)
+# │   ├── bridge/
+# │   └── server/
+# │       └── server.pid
 
 #######################################
 # Certificate Nicknames (NSS Standard)
@@ -195,13 +211,13 @@ log-file = ${SIGUL_BASE_DIR}/logs/client.log
 #######################################
 
 # Bridge health check:
-#   certutil -d sql:${SIGUL_BASE_DIR}/nss/bridge -L -n sigul-ca >/dev/null 2>&1
-#   certutil -d sql:${SIGUL_BASE_DIR}/nss/bridge -L -n sigul-bridge-cert >/dev/null 2>&1
+#   certutil -d sql:${NSS_BASE_DIR}/bridge -L -n sigul-ca >/dev/null 2>&1
+#   certutil -d sql:${NSS_BASE_DIR}/bridge -L -n sigul-bridge-cert >/dev/null 2>&1
 #
 # Server health check:
-#   certutil -d sql:${SIGUL_BASE_DIR}/nss/server -L -n sigul-ca >/dev/null 2>&1
-#   certutil -d sql:${SIGUL_BASE_DIR}/nss/server -L -n sigul-server-cert >/dev/null 2>&1
+#   certutil -d sql:${NSS_BASE_DIR}/server -L -n sigul-ca >/dev/null 2>&1
+#   certutil -d sql:${NSS_BASE_DIR}/server -L -n sigul-server-cert >/dev/null 2>&1
 #
 # Client health check:
-#   certutil -d sql:${SIGUL_BASE_DIR}/nss/client -L -n sigul-ca >/dev/null 2>&1
-#   certutil -d sql:${SIGUL_BASE_DIR}/nss/client -L -n sigul-client-cert >/dev/null 2>&1
+#   certutil -d sql:${NSS_BASE_DIR}/client -L -n sigul-ca >/dev/null 2>&1
+#   certutil -d sql:${NSS_BASE_DIR}/client -L -n sigul-client-cert >/dev/null 2>&1

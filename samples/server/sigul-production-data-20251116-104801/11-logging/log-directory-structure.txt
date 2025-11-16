@@ -1,0 +1,25 @@
+=== Log Directory Structure ===
+/var/log/sigul-base
+/var/log/sigul-bridge-aws-us-west-2-dent-sigul-bridge-1
+/var/log/sigul-bridge-aws-us-west-2-dent-sigul-bridge-1/sigul_server.log
+/var/log/sigul-bridge-aws-us-west-2-dent-sigul-bridge-1/sigul_server.log-20221209.gz
+/var/log/sigul-bridge-aws-us-west-2-dent-sigul-bridge-1/sigul_server.log-20220123.gz
+/var/log/sigul-bridge-aws-us-west-2-dent-sigul-bridge-1/sigul_server.log-20220130.gz
+/var/log/sigul-bridge-aws-us-west-2-dent-sigul-bridge-1/sigul_server.log-20220206.gz
+/var/log/sigul-bridge-aws-us-west-2-lfit-sigul-bridge-1
+/var/log/sigul-bridge-aws-us-west-2-lfit-sigul-bridge-1/sigul_server.log
+/var/log/sigul-bridge-aws-us-west-2-lfit-sigul-bridge-1/sigul_server.log-20251026.gz
+/var/log/sigul-bridge-aws-us-west-2-lfit-sigul-bridge-1/sigul_server.log-20251102.gz
+/var/log/sigul-bridge-aws-us-west-2-lfit-sigul-bridge-1/sigul_server.log-20251109.gz
+/var/log/sigul-bridge-aws-us-west-2-lfit-sigul-bridge-1/sigul_server.log-20251116.gz
+/var/log/sigul-bridge-aws-us-west-2-odpi-sigul-bridge-1
+/var/log/sigul-bridge-aws-us-west-2-odpi-sigul-bridge-1/sigul_server.log
+/var/log/sigul-bridge-aws-us-west-2-odpi-sigul-bridge-1/sigul_server.log-20220123.gz
+/var/log/sigul-bridge-aws-us-west-2-odpi-sigul-bridge-1/sigul_server.log-20220130.gz
+/var/log/sigul-bridge-aws-us-west-2-odpi-sigul-bridge-1/sigul_server.log-20220206.gz
+/var/log/sigul-bridge-aws-us-west-2-odpi-sigul-bridge-1/sigul_server.log-20220213.gz
+/var/log/sigul--etc-sigul-server-bridge-aws-us-west-2-dent-sigul-bridge-1.conf
+/var/log/sigul--etc-sigul-server-bridge-aws-us-west-2-dent-sigul-bridge-1.conf/sigul_server.log
+/var/log/sigul--etc-sigul-server-bridge-aws-us-west-2-odpi-sigul-bridge-1.conf
+/var/log/sigul--etc-sigul-server-bridge-aws-us-west-2-odpi-sigul-bridge-1.conf/sigul_server.log
+/var/log/sigul_server.log

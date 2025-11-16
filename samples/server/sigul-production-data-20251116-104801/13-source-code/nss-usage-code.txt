@@ -1,0 +1,205 @@
+=== NSS Usage ===
+/usr/share/sigul/client.py:31:import nss.nss
+/usr/share/sigul/client.py:169:        mech = nss.nss.CKM_SHA512_HMAC
+/usr/share/sigul/client.py:170:        slot = nss.nss.get_best_slot(mech)
+/usr/share/sigul/client.py:335:        self.__client.outer_shutdown(nss.io.PR_SHUTDOWN_SEND)
+/usr/share/sigul/client.py:1395:    mech = nss.nss.CKM_GENERIC_SECRET_KEY_GEN
+/usr/share/sigul/client.py:1396:    slot = nss.nss.get_best_slot(mech)
+/usr/share/sigul/client.py:1575:    except nss.error.NSPRError, e:
+/usr/share/sigul/client.py:1576:        if e.errno == nss.error.PR_CONNECT_RESET_ERROR:
+/usr/share/sigul/client.py:1588:        elif e.errno == nss.error.PR_END_OF_FILE_ERROR:
+/usr/share/sigul/double_tls.py:23:import nss.error
+/usr/share/sigul/double_tls.py:24:import nss.io
+/usr/share/sigul/double_tls.py:25:import nss.ssl
+/usr/share/sigul/double_tls.py:74:    descs is a dictionary of {nss.io.Socket: flags}.  On return, flags are
+/usr/share/sigul/double_tls.py:80:    res = nss.io.Socket.poll(flat, timeout)
+/usr/share/sigul/double_tls.py:102:_POLL_PROBLEM = nss.io.PR_POLL_ERR | nss.io.PR_POLL_HUP
+/usr/share/sigul/double_tls.py:140:        # nss.error.PR_CONNECT_RESET_ERROR gracefully.
+/usr/share/sigul/double_tls.py:164:            _nspr_poll(poll_descs, nss.io.PR_INTERVAL_NO_TIMEOUT)
+/usr/share/sigul/double_tls.py:214:                    poll_descs.get(self.__inner_src, 0) | nss.io.PR_POLL_READ
+/usr/share/sigul/double_tls.py:218:                    poll_descs.get(self.__outer_src, 0) | nss.io.PR_POLL_READ
+/usr/share/sigul/double_tls.py:222:                                      nss.io.PR_POLL_WRITE)
+/usr/share/sigul/double_tls.py:226:        if (v & _POLL_PROBLEM) != 0 and (v & nss.io.PR_POLL_READ) == 0:
+/usr/share/sigul/double_tls.py:238:        if (v & _POLL_PROBLEM) != 0 and (v & nss.io.PR_POLL_READ) == 0:
+/usr/share/sigul/double_tls.py:259:            (nss.io.PR_POLL_WRITE | _POLL_PROBLEM)) == nss.io.PR_POLL_WRITE:
+/usr/share/sigul/double_tls.py:272:        if (poll_descs.get(self.__inner_src, 0) & nss.io.PR_POLL_READ) == 0:
+/usr/share/sigul/double_tls.py:279:        except nss.error.NSPRError, e:
+/usr/share/sigul/double_tls.py:280:            if e.errno == nss.error.PR_CONNECT_RESET_ERROR:
+/usr/share/sigul/double_tls.py:283:            elif e.errno == nss.error.PR_WOULD_BLOCK_ERROR:
+/usr/share/sigul/double_tls.py:304:        if (poll_descs.get(self.__outer_src, 0) & nss.io.PR_POLL_READ) == 0:
+/usr/share/sigul/double_tls.py:311:        except nss.error.NSPRError, e:
+/usr/share/sigul/double_tls.py:312:            if e.errno == nss.error.PR_CONNECT_RESET_ERROR:
+/usr/share/sigul/double_tls.py:315:            elif e.errno == nss.error.PR_WOULD_BLOCK_ERROR:
+/usr/share/sigul/double_tls.py:354:                    self.__dst.shutdown(nss.io.PR_SHUTDOWN_SEND)
+/usr/share/sigul/double_tls.py:355:                except nss.error.NSPRError, e:
+/usr/share/sigul/double_tls.py:357:                    if e.errno != nss.error.PR_NOT_CONNECTED_ERROR:
+/usr/share/sigul/double_tls.py:400:                                      nss.io.PR_POLL_READ)
+/usr/share/sigul/double_tls.py:404:                poll_descs.get(self.__inner_dst, 0) | nss.io.PR_POLL_WRITE
+/usr/share/sigul/double_tls.py:408:                poll_descs.get(self.__outer_dst, 0) | nss.io.PR_POLL_WRITE
+/usr/share/sigul/double_tls.py:412:        if (v & _POLL_PROBLEM) != 0 and (v & nss.io.PR_POLL_READ) == 0:
+/usr/share/sigul/double_tls.py:434:            (nss.io.PR_POLL_WRITE | _POLL_PROBLEM)) == nss.io.PR_POLL_WRITE:
+/usr/share/sigul/double_tls.py:441:            (nss.io.PR_POLL_WRITE | _POLL_PROBLEM)) == nss.io.PR_POLL_WRITE:
+/usr/share/sigul/double_tls.py:449:        if (poll_descs.get(self.__src, 0) & nss.io.PR_POLL_READ) == 0:
+/usr/share/sigul/double_tls.py:457:        except nss.error.NSPRError, e:
+/usr/share/sigul/double_tls.py:458:            if e.errno == nss.error.PR_CONNECT_RESET_ERROR:
+/usr/share/sigul/double_tls.py:461:            elif e.errno == nss.error.PR_WOULD_BLOCK_ERROR:
+/usr/share/sigul/double_tls.py:515:                    self.__inner_dst.shutdown(nss.io.PR_SHUTDOWN_SEND)
+/usr/share/sigul/double_tls.py:516:                except nss.error.NSPRError, e:
+/usr/share/sigul/double_tls.py:518:                    if e.errno != nss.error.PR_NOT_CONNECTED_ERROR:
+/usr/share/sigul/double_tls.py:528:                    self.__outer_dst.shutdown(nss.io.PR_SHUTDOWN_SEND)
+/usr/share/sigul/double_tls.py:529:                except nss.error.NSPRError, e:
+/usr/share/sigul/double_tls.py:531:                    if e.errno != nss.error.PR_NOT_CONNECTED_ERROR:
+/usr/share/sigul/double_tls.py:625:            self.__inner = nss.ssl.SSLSocket.import_tcp_socket(fd)
+/usr/share/sigul/double_tls.py:630:            self.__inner.set_ssl_option(nss.ssl.SSL_REQUEST_CERTIFICATE, True)
+/usr/share/sigul/double_tls.py:631:            self.__inner.set_ssl_option(nss.ssl.SSL_REQUIRE_CERTIFICATE, True)
+/usr/share/sigul/double_tls.py:633:                cert = nss.nss.find_cert_from_nickname(cert_nickname)
+/usr/share/sigul/double_tls.py:634:            except nss.error.NSPRError, e:
+/usr/share/sigul/double_tls.py:635:                if e.errno == nss.error.SEC_ERROR_BAD_DATABASE:
+/usr/share/sigul/double_tls.py:657:            self.__inner = nss.ssl.SSLSocket.import_tcp_socket(fd)
+/usr/share/sigul/double_tls.py:662:            self.__inner.set_ssl_option(nss.ssl.SSL_REQUEST_CERTIFICATE, True)
+/usr/share/sigul/double_tls.py:663:            self.__inner.set_ssl_option(nss.ssl.SSL_REQUIRE_CERTIFICATE, True)
+/usr/share/sigul/double_tls.py:665:                cert = nss.nss.find_cert_from_nickname(cert_nickname)
+/usr/share/sigul/double_tls.py:666:            except nss.error.NSPRError, e:
+/usr/share/sigul/double_tls.py:667:                if e.errno == nss.error.SEC_ERROR_BAD_DATABASE:
+/usr/share/sigul/double_tls.py:671:            self.__inner.config_secure_server(cert, nss.nss.
+/usr/share/sigul/double_tls.py:739:            inner_pipe_fd = nss.io.Socket.import_tcp_socket(child_inner_pipe.
+/usr/share/sigul/double_tls.py:741:            outer_pipe_fd = nss.io.Socket.import_tcp_socket(child_outer_pipe.
+/usr/share/sigul/double_tls.py:744:            socket_fd = nss.ssl.SSLSocket(nss.io.PR_AF_INET)
+/usr/share/sigul/double_tls.py:745:            socket_fd.set_ssl_option(nss.ssl.SSL_REQUEST_CERTIFICATE, True)
+/usr/share/sigul/double_tls.py:746:            socket_fd.set_ssl_option(nss.ssl.SSL_REQUIRE_CERTIFICATE, True)
+/usr/share/sigul/double_tls.py:748:                cert = nss.nss.find_cert_from_nickname(self.__cert_nickname)
+/usr/share/sigul/double_tls.py:749:            except nss.error.NSPRError, e:
+/usr/share/sigul/double_tls.py:750:                if e.errno == nss.error.SEC_ERROR_BAD_DATABASE:
+/usr/share/sigul/double_tls.py:757:            addr_info = nss.io.AddrInfo(self.__hostname, nss.io.PR_AF_INET,
+/usr/share/sigul/double_tls.py:758:                                        nss.io.PR_AI_ADDRCONFIG)
+/usr/share/sigul/double_tls.py:768:                if (isinstance(first_error, nss.error.NSPRError) and
+/usr/share/sigul/double_tls.py:769:                    first_error.errno == nss.error.PR_CONNECT_RESET_ERROR):
+/usr/share/sigul/double_tls.py:774:            inner_pipe_fd.set_socket_option(nss.io.PR_SockOpt_Nonblocking, True)
+/usr/share/sigul/double_tls.py:775:            outer_pipe_fd.set_socket_option(nss.io.PR_SockOpt_Nonblocking, True)
+/usr/share/sigul/double_tls.py:776:            socket_fd.set_socket_option(nss.io.PR_SockOpt_Nonblocking, True)
+/usr/share/sigul/double_tls.py:790:        except nss.error.NSPRError, e:
+/usr/share/sigul/double_tls.py:791:            if e.errno == nss.error.PR_CONNECT_RESET_ERROR:
+/usr/share/sigul/double_tls.py:793:            elif e.errno == nss.error.SSL_ERROR_EXPIRED_CERT_ALERT:
+/usr/share/sigul/double_tls.py:886:        self.__socket.set_ssl_option(nss.ssl.SSL_ENABLE_FDX, value)
+/usr/share/sigul/double_tls.py:949:                                      nss.io.PR_POLL_READ)
+/usr/share/sigul/double_tls.py:953:                                      nss.io.PR_POLL_WRITE)
+/usr/share/sigul/double_tls.py:957:        if (v & _POLL_PROBLEM) != 0 and (v & nss.io.PR_POLL_READ) == 0:
+/usr/share/sigul/double_tls.py:970:            (nss.io.PR_POLL_WRITE | _POLL_PROBLEM)) == nss.io.PR_POLL_WRITE:
+/usr/share/sigul/double_tls.py:978:        if (poll_descs.get(self.__src, 0) & nss.io.PR_POLL_READ) == 0:
+/usr/share/sigul/double_tls.py:985:        except nss.error.NSPRError, e:
+/usr/share/sigul/double_tls.py:986:            if e.errno == nss.error.PR_CONNECT_RESET_ERROR:
+/usr/share/sigul/double_tls.py:989:            elif e.errno == nss.error.PR_WOULD_BLOCK_ERROR:
+/usr/share/sigul/double_tls.py:1049:    client_fd.set_socket_option(nss.io.PR_SockOpt_Nonblocking, True)
+/usr/share/sigul/double_tls.py:1050:    server_fd.set_socket_option(nss.io.PR_SockOpt_Nonblocking, True)
+/usr/share/sigul/double_tls.py:1056:    client_fd.set_socket_option(nss.io.PR_SockOpt_Nonblocking, False)
+/usr/share/sigul/double_tls.py:1057:    server_fd.set_socket_option(nss.io.PR_SockOpt_Nonblocking, False)
+/usr/share/sigul/server_common.py:30:import nss.nss
+/usr/share/sigul/server_common.py:83:        random = nss.nss.generate_random(self.__salt_length)
+/usr/share/sigul/server.py:39:import nss.error
+/usr/share/sigul/server.py:40:import nss.nss
+/usr/share/sigul/server.py:321:            nss.nss.sha512_digest(header_data)):
+/usr/share/sigul/server.py:332:        mech = nss.nss.CKM_SHA512_HMAC
+Not found
+
+=== TLS Configuration Usage ===
+/usr/share/sigul/client.py-import nss.nss
+/usr/share/sigul/client.py-
+/usr/share/sigul/client.py:import double_tls
+/usr/share/sigul/client.py-import errors
+/usr/share/sigul/client.py-import settings
+/usr/share/sigul/client.py-import utils
+/usr/share/sigul/client.py-
+/usr/share/sigul/client.py-MAX_SIGN_RPMS_PAYLOAD_SIZE = 9 * 1024 * 1024 * 1024
+--
+/usr/share/sigul/client.py-    def connect(self, op, outer_fields):
+/usr/share/sigul/client.py-        '''Connect and send outer_fields if op, outer_fields is not None.'''
+/usr/share/sigul/client.py:        self.__client = double_tls.DoubleTLSClient(self.config,
+/usr/share/sigul/client.py-                                                   self.config.bridge_hostname,
+/usr/share/sigul/client.py-                                                   self.config.bridge_port,
+/usr/share/sigul/client.py-                                                   self.config.
+/usr/share/sigul/client.py-                                                   client_cert_nickname)
+/usr/share/sigul/client.py-        try:
+--
+/usr/share/sigul/client.py-            self.__client.inner_open_client(self.config.server_hostname,
+/usr/share/sigul/client.py-                                            self.config.client_cert_nickname)
+/usr/share/sigul/client.py:        except double_tls.InnerCertificateNotFound, e:
+/usr/share/sigul/client.py-            raise ClientError(str(e))
+/usr/share/sigul/client.py-        try:
+/usr/share/sigul/client.py-            self.__client.inner_write(utils.format_fields(fields))
+/usr/share/sigul/client.py-        finally:
+/usr/share/sigul/client.py-            self.__client.inner_close()
+--
+/usr/share/sigul/client.py-        '''Close the connection.
+/usr/share/sigul/client.py-
+/usr/share/sigul/client.py:        Raise double_tls.ChildConnectionRefusedError,
+/usr/share/sigul/client.py:        double_tls.ChildUnrecoverableError.
+/usr/share/sigul/client.py-
+/usr/share/sigul/client.py-        '''
+/usr/share/sigul/client.py-        if self.__client is not None:
+/usr/share/sigul/client.py-            try:
+/usr/share/sigul/client.py-                self.__client.outer_close()
+--
+/usr/share/sigul/client.py-            try:
+/usr/share/sigul/client.py-                conn.close()
+/usr/share/sigul/client.py:            except (double_tls.ChildConnectionRefusedError,
+/usr/share/sigul/client.py:                    double_tls.ChildUnrecoverableError), e:
+/usr/share/sigul/client.py-                child_exception = e
+/usr/share/sigul/client.py-    except ClientError, e:
+/usr/share/sigul/client.py-        if str(e) != '':
+/usr/share/sigul/client.py-            sys.exit(str(e))
+/usr/share/sigul/client.py-        else:
+--
+/usr/share/sigul/client.py-            if child_exception is not None:
+/usr/share/sigul/client.py-                if isinstance(child_exception,
+/usr/share/sigul/client.py:                              double_tls.ChildConnectionRefusedError):
+/usr/share/sigul/client.py-                    logging.error('Connection refused')
+/usr/share/sigul/client.py-                elif isinstance(child_exception,
+/usr/share/sigul/client.py:                                double_tls.ChildUnrecoverableError):
+/usr/share/sigul/client.py-                    logging.debug('Unrecoverable error in child')
+/usr/share/sigul/client.py-                else:
+/usr/share/sigul/client.py-                    assert False, 'Unhandled child_exception type'
+/usr/share/sigul/client.py-            else:
+/usr/share/sigul/client.py-                logging.error('I/O error: NSPR connection reset')
+--
+/usr/share/sigul/server.py-import pexpect
+/usr/share/sigul/server.py-
+/usr/share/sigul/server.py:import double_tls
+/usr/share/sigul/server.py-import errors
+/usr/share/sigul/server.py-import server_common
+/usr/share/sigul/server.py-import settings
+/usr/share/sigul/server.py-import utils
+/usr/share/sigul/server.py-
+--
+/usr/share/sigul/server.py-
+/usr/share/sigul/server.py-class ServerProxy(object):
+/usr/share/sigul/server.py:    '''A proxy for double_tls.DoubleTLSClient that stores read outer data.'''
+/usr/share/sigul/server.py-
+/usr/share/sigul/server.py-    def __init__(self, server):
+/usr/share/sigul/server.py-        self.__server = server
+/usr/share/sigul/server.py-        self.__stored = ''
+/usr/share/sigul/server.py-
+--
+/usr/share/sigul/server.py-    def __init__(self, config):
+/usr/share/sigul/server.py-        self.config = config
+/usr/share/sigul/server.py:        self.__client = double_tls.DoubleTLSClient(config,
+/usr/share/sigul/server.py-                                                   config.bridge_hostname,
+/usr/share/sigul/server.py-                                                   config.bridge_port,
+/usr/share/sigul/server.py-                                                   config.server_cert_nickname)
+/usr/share/sigul/server.py-        self.payload_path = None
+/usr/share/sigul/server.py-        self.payload_file = None
+--
+/usr/share/sigul/server.py-
+/usr/share/sigul/server.py-        Return request handler.  Raise RequestHandled, InvalidRequestError,
+/usr/share/sigul/server.py:        double_tls.InnerCertificateNotFound.
+/usr/share/sigul/server.py-
+/usr/share/sigul/server.py-        '''
+/usr/share/sigul/server.py-        proxy = ServerProxy(self.__client)
+/usr/share/sigul/server.py-        buf = proxy.stored_outer_read(utils.u32_size)
+/usr/share/sigul/server.py-        logging.debug('Started processing a request')
+--
+/usr/share/sigul/server.py-
+/usr/share/sigul/server.py-        # FIXME? authenticate using the client's certificate as well?
+/usr/share/sigul/server.py:        # May raise double_tls.InnerCertificateNotFound.
+/usr/share/sigul/server.py-        self.__client.inner_open_server(self.config.server_cert_nickname)
+/usr/share/sigul/server.py-        try:
+Not found

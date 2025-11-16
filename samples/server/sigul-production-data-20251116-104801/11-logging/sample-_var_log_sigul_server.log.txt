@@ -1,0 +1,1 @@
+=== Last 50 lines of /var/log/sigul_server.log ===

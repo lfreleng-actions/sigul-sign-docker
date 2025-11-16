@@ -1,0 +1,202 @@
+=== Certificate Validation Logic ===
+/usr/share/sigul/bridge.py-
+/usr/share/sigul/bridge.py-    default_config_file = 'bridge.conf'
+/usr/share/sigul/bridge.py-
+/usr/share/sigul/bridge.py-    def _add_defaults(self, defaults):
+/usr/share/sigul/bridge.py-        super(BridgeConfiguration, self)._add_defaults(defaults)
+/usr/share/sigul/bridge.py:        defaults.update({'bridge-cert-nickname': 'sigul-bridge-cert',
+/usr/share/sigul/bridge.py-                         'client-listen-port': 44334,
+/usr/share/sigul/bridge.py-                         'max-rpms-payloads-size': 10 * 1024 * 1024 * 1024,
+/usr/share/sigul/bridge.py-                         'required-fas-group': '',
+/usr/share/sigul/bridge.py-                         'server-listen-port': 44333})
+/usr/share/sigul/bridge.py-        # Override NSSConfiguration default
+/usr/share/sigul/bridge.py-        defaults.update({'nss-dir': settings.default_server_nss_path})
+/usr/share/sigul/bridge.py-
+/usr/share/sigul/bridge.py-    def _add_sections(self, sections):
+/usr/share/sigul/bridge.py-        super(BridgeConfiguration, self)._add_sections(sections)
+/usr/share/sigul/bridge.py-        sections.update(('bridge', 'koji'))
+/usr/share/sigul/bridge.py-
+/usr/share/sigul/bridge.py-    def _read_configuration(self, parser):
+/usr/share/sigul/bridge.py-        super(BridgeConfiguration, self)._read_configuration(parser)
+/usr/share/sigul/bridge.py:        self.bridge_cert_nickname = parser.get('bridge', 'bridge-cert-nickname')
+/usr/share/sigul/bridge.py-        self.client_listen_port = parser.getint('bridge', 'client-listen-port')
+/usr/share/sigul/bridge.py-        self.required_fas_group = parser.get('bridge', 'required-fas-group')
+/usr/share/sigul/bridge.py-        if self.required_fas_group == '':
+/usr/share/sigul/bridge.py-            self.required_fas_group = None
+/usr/share/sigul/bridge.py-        else:
+/usr/share/sigul/bridge.py-            if not have_fas:
+/usr/share/sigul/bridge.py-                raise utils.ConfigurationError('Fedora Account system '
+/usr/share/sigul/bridge.py-                                               'authentication not supported')
+/usr/share/sigul/bridge.py-            self.fas_user_name = parser.get('bridge', 'fas-user-name')
+/usr/share/sigul/bridge.py-            self.fas_password = parser.get('bridge', 'fas-password')
+--
+/usr/share/sigul/bridge.py-    # FIXME? does this belong in a finished product?
+/usr/share/sigul/bridge.py-    sock.set_socket_option(nss.io.PR_SockOpt_Reuseaddr, True)
+/usr/share/sigul/bridge.py-    sock.set_ssl_option(nss.ssl.SSL_REQUEST_CERTIFICATE, True)
+/usr/share/sigul/bridge.py-    sock.set_ssl_option(nss.ssl.SSL_REQUIRE_CERTIFICATE, True)
+/usr/share/sigul/bridge.py-    try:
+/usr/share/sigul/bridge.py:        cert = nss.nss.find_cert_from_nickname(config.bridge_cert_nickname)
+/usr/share/sigul/bridge.py-    except nss.error.NSPRError, e:
+/usr/share/sigul/bridge.py-        if e.errno == nss.error.SEC_ERROR_BAD_DATABASE:
+/usr/share/sigul/bridge.py-            raise BridgeError('Certificate \'%s\' is not available' %
+/usr/share/sigul/bridge.py:                              config.bridge_cert_nickname)
+/usr/share/sigul/bridge.py-        raise
+/usr/share/sigul/bridge.py-    sock.config_secure_server(cert, nss.nss.find_key_by_any_cert(cert),
+/usr/share/sigul/bridge.py-                              cert.find_kea_type())
+/usr/share/sigul/bridge.py-    sock.bind(nss.io.NetworkAddress(nss.io.PR_IpAddrAny, port))
+/usr/share/sigul/bridge.py-    sock.listen()
+/usr/share/sigul/bridge.py-    return sock
+/usr/share/sigul/bridge.py-
+/usr/share/sigul/bridge.py-class InvalidRequestError(Exception):
+/usr/share/sigul/bridge.py-    '''The client's request was invalid.'''
+/usr/share/sigul/bridge.py-    pass
+--
+/usr/share/sigul/bridge.py-    '''
+/usr/share/sigul/bridge.py-    def __init__(self, conn):
+/usr/share/sigul/bridge.py-        '''Initialize for conn.'''
+/usr/share/sigul/bridge.py-        self.__conn = conn
+/usr/share/sigul/bridge.py-        if not utils.string_is_safe(conn.user_name):
+/usr/share/sigul/bridge.py:            raise InvalidRequestError('Client certificate CN is not printable')
+/usr/share/sigul/bridge.py-        self.__koji_session = None
+/usr/share/sigul/bridge.py-        self.__koji_config = None
+/usr/share/sigul/bridge.py-        self.__koji_pathinfo = None
+/usr/share/sigul/bridge.py-
+/usr/share/sigul/bridge.py-    def __get_session(self):
+/usr/share/sigul/bridge.py-        '''Return a koji session, creating it if necessary.
+/usr/share/sigul/bridge.py-
+/usr/share/sigul/bridge.py-        Also make sure self.__koji_config and self.__koji_pathinfo is set up.
+/usr/share/sigul/bridge.py-        Raise ForwardingError.
+/usr/share/sigul/bridge.py-
+/usr/share/sigul/bridge.py-        '''
+/usr/share/sigul/bridge.py-        # Don't import koji before opening sockets!  The rpm Python module
+/usr/share/sigul/bridge.py-        # calls NSS_NoDB_Init() during its initialization, which breaks our
+/usr/share/sigul/bridge.py:        # attempts to initialize nss with our certificate database.
+/usr/share/sigul/bridge.py-        import koji
+/usr/share/sigul/bridge.py-
+/usr/share/sigul/bridge.py-        if self.__koji_config is None:
+/usr/share/sigul/bridge.py-            instance = self.__conn.request_fields.get('koji-instance')
+/usr/share/sigul/bridge.py-            StringField('koji-instance', optional=True).validate(instance)
+/usr/share/sigul/bridge.py-            try:
+/usr/share/sigul/bridge.py-                self.__koji_config = utils.koji_read_config(self.__conn.config,
+/usr/share/sigul/bridge.py-                                                            instance)
+/usr/share/sigul/bridge.py-            except utils.KojiError, e:
+/usr/share/sigul/bridge.py-                raise ForwardingError('Error preparing Koji configuration: %s' %
+--
+/usr/share/sigul/bridge.py-        Raise ForwardingError.
+/usr/share/sigul/bridge.py-
+/usr/share/sigul/bridge.py-        '''
+/usr/share/sigul/bridge.py-        # Don't import koji before opening sockets!  The rpm Python module
+/usr/share/sigul/bridge.py-        # calls NSS_NoDB_Init() during its initialization, which breaks our
+/usr/share/sigul/bridge.py:        # attempts to initialize nss with our certificate database.
+/usr/share/sigul/bridge.py-        import koji
+/usr/share/sigul/bridge.py-
+/usr/share/sigul/bridge.py-        session = self.__get_session()
+/usr/share/sigul/bridge.py-        d = {}
+/usr/share/sigul/bridge.py-        for (key, field) in self.__rpm_info_map.iteritems():
+/usr/share/sigul/bridge.py-            v = fields.get(field.name)
+/usr/share/sigul/bridge.py-            field.validate(v)
+/usr/share/sigul/bridge.py-            d[key] = v
+/usr/share/sigul/bridge.py-        try:
+/usr/share/sigul/bridge.py-            info = session.getRPM(d)
+--
+/usr/share/sigul/bridge.py-        Raise ForwardingError.
+/usr/share/sigul/bridge.py-
+/usr/share/sigul/bridge.py-        '''
+/usr/share/sigul/bridge.py-        # Don't import koji before opening sockets!  The rpm Python module
+/usr/share/sigul/bridge.py-        # calls NSS_NoDB_Init() during its initialization, which breaks our
+/usr/share/sigul/bridge.py:        # attempts to initialize nss with our certificate database.
+/usr/share/sigul/bridge.py-        import koji
+/usr/share/sigul/bridge.py-
+/usr/share/sigul/bridge.py-        session = self.__get_session()
+/usr/share/sigul/bridge.py-        try:
+/usr/share/sigul/bridge.py-            build = session.getBuild(rpm_info['build_id'])
+/usr/share/sigul/bridge.py-            if build is None:
+/usr/share/sigul/bridge.py-                raise ForwardingError('RPM has no build')
+/usr/share/sigul/bridge.py-        except (utils.KojiError, koji.GenericError), e:
+/usr/share/sigul/bridge.py-            raise ForwardingError('Koji connection failed: %s' % str(e))
+/usr/share/sigul/bridge.py-        return (self.__koji_pathinfo.build(build) + '/' +
+--
+/usr/share/sigul/bridge.py-        Raise ForwardingError.
+/usr/share/sigul/bridge.py-
+/usr/share/sigul/bridge.py-        '''
+/usr/share/sigul/bridge.py-        # Don't import koji or rpm before opening sockets!  The rpm Python
+/usr/share/sigul/bridge.py-        # module calls NSS_NoDB_Init() during its initialization, which breaks
+/usr/share/sigul/bridge.py:        # our attempts to initialize nss with our certificate database.
+/usr/share/sigul/bridge.py-        import koji
+/usr/share/sigul/bridge.py-        import rpm
+/usr/share/sigul/bridge.py-
+/usr/share/sigul/bridge.py-        session = self.__get_session()
+/usr/share/sigul/bridge.py-        try:
+/usr/share/sigul/bridge.py-            header_fields = koji.get_header_fields(path, ('siggpg', 'sigpgp'))
+/usr/share/sigul/bridge.py-        except rpm.error:
+/usr/share/sigul/bridge.py-            raise ForwardingError('Corrupt RPM returned by server')
+/usr/share/sigul/bridge.py-
+/usr/share/sigul/bridge.py-        sigkey = header_fields['siggpg']
+--
+/usr/share/sigul/bridge.py-
+/usr/share/sigul/bridge.py-    @staticmethod
+/usr/share/sigul/bridge.py-    def handle_connection(config, client_sock, server_sock):
+/usr/share/sigul/bridge.py-        '''Handle a single connection using client_sock and server_sock.'''
+/usr/share/sigul/bridge.py-        client_sock.force_handshake()
+/usr/share/sigul/bridge.py:        cert = client_sock.get_peer_certificate()
+/usr/share/sigul/bridge.py-        assert cert is not None
+/usr/share/sigul/bridge.py-        user_name = cert.subject_common_name
+/usr/share/sigul/bridge.py-        logging.info('Client with CN %s connected', repr(user_name))
+/usr/share/sigul/bridge.py-        if (config.required_fas_group is not None and
+/usr/share/sigul/bridge.py-            not fas_user_is_in_group(config, user_name,
+/usr/share/sigul/bridge.py-                                     config.required_fas_group)):
+/usr/share/sigul/bridge.py-            raise InvalidRequestError('User %s not allowed to connect'
+/usr/share/sigul/bridge.py-                                      % repr(user_name))
+/usr/share/sigul/bridge.py-
+/usr/share/sigul/bridge.py-        client_buf = double_tls.OuterBuffer(client_sock)
+--
+/usr/share/sigul/bridge.py-        logging.info('I/O error: %s', repr(e))
+/usr/share/sigul/bridge.py-    except EOFError, e:
+/usr/share/sigul/bridge.py-        logging.info('Unexpected EOF: %s', repr(e))
+/usr/share/sigul/bridge.py-    except nss.error.NSPRError, e:
+/usr/share/sigul/bridge.py-        if e.errno == nss.error.SEC_ERROR_EXPIRED_CERTIFICATE:
+/usr/share/sigul/bridge.py:            logging.warning("Peer's certificate has expired, rejecting "
+/usr/share/sigul/bridge.py-                            "connection")
+/usr/share/sigul/bridge.py-        else:
+/usr/share/sigul/bridge.py-            logging.info('NSPR I/O error: %s', str(e), exc_info=True)
+/usr/share/sigul/bridge.py-    except BridgeError, e:
+/usr/share/sigul/bridge.py-        logging.warning(str(e))
+/usr/share/sigul/bridge.py-    logging.debug('Request handling finished')
+/usr/share/sigul/bridge.py-
+/usr/share/sigul/bridge.py-def main():
+/usr/share/sigul/bridge.py-    options = utils.get_daemon_options('A signing server bridge',
+/usr/share/sigul/bridge.py-                                       '~/.sigul/bridge.conf')
+--
+/usr/share/sigul/client.py-    default_config_file = 'client.conf'
+/usr/share/sigul/client.py-
+/usr/share/sigul/client.py-    def _add_defaults(self, defaults):
+/usr/share/sigul/client.py-        super(ClientConfiguration, self)._add_defaults(defaults)
+/usr/share/sigul/client.py-        defaults.update({'bridge-port': 44334,
+/usr/share/sigul/client.py:                         'client-cert-nickname': 'sigul-client-cert',
+/usr/share/sigul/client.py-                         'user-name': getpass.getuser(),
+/usr/share/sigul/client.py-                         'passphrase-length': 128},)
+/usr/share/sigul/client.py-
+/usr/share/sigul/client.py-    def _add_sections(self, sections):
+/usr/share/sigul/client.py-        super(ClientConfiguration, self)._add_sections(sections)
+/usr/share/sigul/client.py-        sections.add('client')
+/usr/share/sigul/client.py-
+/usr/share/sigul/client.py-    def _read_configuration(self, parser):
+/usr/share/sigul/client.py-        super(ClientConfiguration, self)._read_configuration(parser)
+/usr/share/sigul/client.py-        self.bridge_hostname = parser.get('client', 'bridge-hostname')
+/usr/share/sigul/client.py-        self.bridge_port = parser.getint('client', 'bridge-port')
+/usr/share/sigul/client.py:        self.client_cert_nickname = parser.get('client', 'client-cert-nickname')
+/usr/share/sigul/client.py-        self.server_hostname = parser.get('client', 'server-hostname')
+/usr/share/sigul/client.py-        self.user_name = parser.get('client', 'user-name')
+/usr/share/sigul/client.py-        self.passphrase_length = parser.get('client', 'passphrase-length')
+/usr/share/sigul/client.py-        self.batch_mode = False
+/usr/share/sigul/client.py-
+/usr/share/sigul/client.py-def safe_string(s):
+/usr/share/sigul/client.py-    '''Raise ClientError if s is not a safe string, otherwise return s.'''
+/usr/share/sigul/client.py-    if not utils.string_is_safe(s):
+/usr/share/sigul/client.py-        raise ClientError('\'%s\' (%s) contains prohibited characters' %
+/usr/share/sigul/client.py-                          (s, repr(s)))
+--
+/usr/share/sigul/client.py-        '''Connect and send outer_fields if op, outer_fields is not None.'''
+/usr/share/sigul/client.py-        self.__client = double_tls.DoubleTLSClient(self.config,
+/usr/share/sigul/client.py-                                                   self.config.bridge_hostname,
+Not found

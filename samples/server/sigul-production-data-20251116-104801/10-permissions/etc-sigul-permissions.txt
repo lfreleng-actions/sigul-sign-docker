@@ -1,0 +1,8 @@
+=== /etc/sigul/ Permissions ===
+drwxr-xr-x. root  root  system_u:object_r:sigul_conf_t:s0 .
+drwxr-xr-x. root  root  system_u:object_r:etc_t:s0       ..
+-rw-------. sigul sigul system_u:object_r:sigul_conf_t:s0 base.conf
+-rw-r--r--. root  root  system_u:object_r:sigul_conf_t:s0 client.conf
+-rw-------. sigul sigul system_u:object_r:sigul_conf_t:s0 server-bridge-aws-us-west-2-dent-sigul-bridge-1.conf
+-rw-------. sigul sigul system_u:object_r:sigul_conf_t:s0 server-bridge-aws-us-west-2-lfit-sigul-bridge-1.conf
+-rw-------. sigul sigul system_u:object_r:sigul_conf_t:s0 server-bridge-aws-us-west-2-odpi-sigul-bridge-1.conf

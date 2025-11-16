@@ -1,0 +1,2 @@
+=== Database Integrity Check ===
+ok
