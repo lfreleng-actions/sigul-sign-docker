@@ -562,9 +562,9 @@ jobs:
               docker manifest inspect "${tag}"
           done
 
-  ### Step 4b: Sign, attest, SBOM, and vuln-scan each image ###
-  sign-attest-scan:
-    name: 'Sign+SBOM+Scan: ${{ matrix.component }}'
+  ### Step 4b: Sign image and attest build provenance ###
+  sign-attest:
+    name: 'Sign+Attest: ${{ matrix.component }}'
     needs: [tag-validate, publish-ghcr]
     runs-on: 'ubuntu-latest'
     permissions:
@@ -572,29 +572,15 @@ jobs:
       packages: write
       # cosign keyless signing + attestation predicates use OIDC.
       id-token: write
-      # actions/attest-build-provenance + actions/attest-sbom write
-      # signed attestations and (with push-to-registry: true) attach
-      # them as OCI referrers on the manifest digest.
+      # actions/attest-build-provenance writes signed attestations
+      # and (with push-to-registry: true) attaches them as OCI
+      # referrers on the manifest digest.
       attestations: write
-      # github/codeql-action/upload-sarif publishes Grype findings
-      # to the repository's code-scanning alerts.
-      security-events: write
-    timeout-minutes: 20
+    timeout-minutes: 15
     strategy:
-      # Don't short-circuit other components if one's Grype scan
-      # finds CVEs at the configured threshold; we want SBOMs and
-      # SARIF for every component in a single release run.
       fail-fast: false
       matrix:
         component: ['client', 'server', 'bridge']
-    env:
-      # 'low' is intentionally aggressive: the bridge and server
-      # both handle signing material and the client is consumed
-      # widely downstream, so any known-fixable CVE warrants
-      # release-time visibility. Set the NO_BLOCK_AUDIT_FAIL repo
-      # variable to 'true' to soft-fail (warn but still publish)
-      # when a transitive CVE is blocking an urgent release.
-      GRYPE_FAIL_ON: 'low'
     steps:
       # yamllint disable-line rule:line-length
       - uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411  # v2.19.4
@@ -624,8 +610,8 @@ jobs:
           set -euo pipefail
           # The publish-ghcr job uploaded a multi-arch manifest list
           # under <image>:<tag>. Resolve the manifest-list digest so
-          # cosign / attest / SBOM all bind to the immutable digest
-          # rather than the moving tag.
+          # cosign / attest all bind to the immutable digest rather
+          # than the moving tag.
           digest=$(docker buildx imagetools inspect \
             "${IMAGE}:${TAG}" \
             --format '{{json .Manifest}}' \
@@ -659,6 +645,71 @@ jobs:
           subject-digest: ${{ steps.ref.outputs.digest }}
           push-to-registry: true
 
+  ### Step 4c: Generate SBOM and attest ###
+  sbom:
+    name: 'SBOM: ${{ matrix.component }}'
+    needs: [tag-validate, publish-ghcr]
+    runs-on: 'ubuntu-latest'
+    permissions:
+      contents: read
+      packages: write
+      # OIDC + attestations: actions/attest-sbom attaches a signed
+      # SBOM predicate to the image manifest via the OCI referrers
+      # API.
+      id-token: write
+      attestations: write
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        component: ['client', 'server', 'bridge']
+    steps:
+      # yamllint disable-line rule:line-length
+      - uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411  # v2.19.4
+        with:
+          egress-policy: 'audit'
+
+      - name: 'Set up Docker Buildx'
+        # yamllint disable-line rule:line-length
+        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd  # v4.0.0
+
+      - name: 'Log in to GitHub Container Registry'
+        # yamllint disable-line rule:line-length
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121  # v4.1.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 'Resolve multi-arch manifest digest'
+        id: ref
+        shell: bash
+        env:
+          # yamllint disable-line rule:line-length
+          IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_BASE }}/${{ matrix.component }}
+          TAG: ${{ needs.tag-validate.outputs.tag }}
+        run: |
+          set -euo pipefail
+          # Resolve independently of sign-attest: the digest is
+          # immutable so the result is identical, and keeping the
+          # jobs decoupled means an unrelated sign-attest failure
+          # does not block SBOM generation.
+          digest=$(docker buildx imagetools inspect \
+            "${IMAGE}:${TAG}" \
+            --format '{{json .Manifest}}' \
+            | jq -r '.digest')
+          if [[ -z "${digest}" || "${digest}" == "null" ]]; then
+            echo "::error::Could not resolve manifest digest" \
+              "for ${IMAGE}:${TAG}" >&2
+            exit 1
+          fi
+          echo "Resolved ${IMAGE}:${TAG} -> ${digest}"
+          {
+            echo "image=${IMAGE}"
+            echo "digest=${digest}"
+            echo "ref=${IMAGE}@${digest}"
+          } >> "$GITHUB_OUTPUT"
+
       - name: 'Generate SPDX SBOM'
         # yamllint disable-line rule:line-length
         uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610  # v0.24.0
@@ -666,10 +717,11 @@ jobs:
           image: ${{ steps.ref.outputs.ref }}
           format: spdx-json
           output-file: sbom-${{ matrix.component }}.spdx.json
-          # The SBOM action's own artifact upload duplicates our
-          # explicit upload-artifact step below; disabling it
-          # avoids 'name already exists' failures and keeps all
-          # release assets under one consistent naming pattern.
+          # The SBOM action's own artifact upload is disabled in
+          # favour of the explicit upload-artifact step below so
+          # all release assets land under one consistent naming
+          # pattern (sbom-<component>) that release-attach and the
+          # audit job both target.
           upload-artifact: false
 
       - name: 'Attest SBOM'
@@ -680,6 +732,53 @@ jobs:
           subject-digest: ${{ steps.ref.outputs.digest }}
           sbom-path: sbom-${{ matrix.component }}.spdx.json
           push-to-registry: true
+
+      - name: 'Upload SBOM artifact'
+        # yamllint disable-line rule:line-length
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: sbom-${{ matrix.component }}
+          path: sbom-${{ matrix.component }}.spdx.json
+          retention-days: 90
+          if-no-files-found: error
+
+  ### Step 4d: Audit SBOM with Grype ###
+  audit:
+    name: 'Audit SBOM: ${{ matrix.component }}'
+    needs: [sbom]
+    runs-on: 'ubuntu-latest'
+    permissions:
+      contents: read
+      # github/codeql-action/upload-sarif publishes Grype findings
+      # to the repository's code-scanning alerts.
+      security-events: write
+    timeout-minutes: 15
+    strategy:
+      # Don't short-circuit other components if one's Grype scan
+      # finds CVEs at the configured threshold; we want SARIF for
+      # every component in a single release run.
+      fail-fast: false
+      matrix:
+        component: ['client', 'server', 'bridge']
+    env:
+      # 'low' is intentionally aggressive: the bridge and server
+      # both handle signing material and the client is consumed
+      # widely downstream, so any known-fixable CVE warrants
+      # release-time visibility. Set the NO_BLOCK_AUDIT_FAIL repo
+      # variable to 'true' to soft-fail (warn but still publish)
+      # when a transitive CVE is blocking an urgent release.
+      GRYPE_FAIL_ON: 'low'
+    steps:
+      # yamllint disable-line rule:line-length
+      - uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411  # v2.19.4
+        with:
+          egress-policy: 'audit'
+
+      - name: 'Download SBOM artifact'
+        # yamllint disable-line rule:line-length
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+        with:
+          name: sbom-${{ matrix.component }}
 
       - name: 'Install Grype'
         id: grype
@@ -748,14 +847,13 @@ jobs:
           sarif_file: grype-${{ matrix.component }}.sarif
           category: grype-${{ matrix.component }}
 
-      - name: 'Upload SBOM and Grype reports as workflow artifact'
+      - name: 'Upload Grype reports as workflow artifact'
         if: always()
         # yamllint disable-line rule:line-length
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
-          name: sbom-and-scan-${{ matrix.component }}
+          name: grype-${{ matrix.component }}
           path: |
-            sbom-${{ matrix.component }}.spdx.json
             grype-${{ matrix.component }}.sarif
             grype-${{ matrix.component }}.json
             grype-${{ matrix.component }}.txt
@@ -823,16 +921,17 @@ jobs:
             ' "${json_file}"
           } >> "$GITHUB_STEP_SUMMARY"
 
-  ### Step 4c: Attach SBOM + Grype reports to draft release ###
+  ### Step 4e: Attach SBOM + Grype reports to draft release ###
   release-attach:
     name: 'Attach Release Assets'
-    needs: [tag-validate, sign-attest-scan]
-    # Run even when sign-attest-scan fails: SBOM and Grype reports
-    # are most valuable on a failing release because they explain
-    # *why* it failed. The upload step below no-ops gracefully
-    # when no artifacts were produced, and promote-release still
-    # waits on sign-attest-scan, so a failed scan leaves the
-    # draft un-promoted regardless of release-attach's outcome.
+    needs: [tag-validate, sign-attest, sbom, audit]
+    # Run even when sign-attest, sbom or audit fails: SBOM and Grype
+    # reports are most valuable on a failing release because they
+    # explain *why* it failed. The upload step below no-ops
+    # gracefully when no artifacts were produced, and
+    # promote-release still waits on all three of sign-attest,
+    # sbom, and audit, so a failure in any leaves the draft
+    # un-promoted regardless of release-attach's outcome.
     if: >-
       always() && needs.tag-validate.result == 'success'
     runs-on: 'ubuntu-24.04'
@@ -853,19 +952,29 @@ jobs:
       # workspace, so a checkout would just waste runtime and
       # broaden the credential-exposure surface for no benefit.
 
-      - name: 'Download SBOMs + Grype reports'
-        # Tolerate runs where no sbom-and-scan-* artifacts were
-        # produced (e.g. sign-attest-scan failed before the
-        # upload-artifact step in any matrix entry). The next step
-        # checks for and gracefully no-ops on an empty asset set,
-        # but only if this step is allowed to succeed without
-        # files.
+      - name: 'Download SBOM artifacts'
+        # Tolerate runs where no sbom-* artifacts were produced
+        # (e.g. sbom failed before the upload-artifact step in any
+        # matrix entry). The find step below no-ops gracefully on
+        # an empty asset set.
         continue-on-error: true
         # yamllint disable-line rule:line-length
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
         with:
           path: release-assets
-          pattern: sbom-and-scan-*
+          pattern: sbom-*
+          merge-multiple: true
+
+      - name: 'Download Grype report artifacts'
+        # Same tolerance as the SBOM download: surface what we can,
+        # let the upload/footer steps decide what to do with the
+        # results.
+        continue-on-error: true
+        # yamllint disable-line rule:line-length
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+        with:
+          path: release-assets
+          pattern: grype-*
           merge-multiple: true
 
       - name: 'Upload SBOMs and Grype reports to release'
@@ -888,15 +997,16 @@ jobs:
 
       - name: 'Append verification footer to release notes'
         # Only stamp the footer (with its cosign verify / gh
-        # attestation verify guidance) when sign-attest-scan
-        # actually ran. If publish-ghcr failed and the scan job
-        # was skipped, no signatures or attestations exist and
-        # the footer's claims would be false. A scan that ran
-        # and failed still produced some signatures/attestations
-        # for some matrix entries, so partial-failure runs are
-        # treated as 'footer-worthy' — verification just won't
-        # succeed for the missing components.
-        if: needs.sign-attest-scan.result != 'skipped'
+        # attestation verify guidance) when sign-attest actually
+        # ran. If publish-ghcr failed and the sign-attest job was
+        # skipped, no signatures or attestations exist and the
+        # footer's claims would be false. A sign-attest run that
+        # ran and failed still produced some signatures and
+        # provenance attestations for some matrix entries, so
+        # partial-failure runs are treated as 'footer-worthy' --
+        # verification just won't succeed for the missing
+        # components.
+        if: needs.sign-attest.result != 'skipped'
         shell: bash
         env:
           REPO: ${{ github.repository }}
@@ -987,7 +1097,14 @@ jobs:
   ### Step 5: Promote draft release ###
   promote-release:
     name: 'Promote Draft Release'
-    needs: [tag-validate, publish-ghcr, sign-attest-scan, release-attach]
+    needs: [
+      tag-validate,
+      publish-ghcr,
+      sign-attest,
+      sbom,
+      audit,
+      release-attach
+    ]
     runs-on: 'ubuntu-24.04'
     permissions:
       contents: write
@@ -1045,7 +1162,9 @@ jobs:
       - build-containers
       - functional-tests
       - publish-ghcr
-      - sign-attest-scan
+      - sign-attest
+      - sbom
+      - audit
       - release-attach
       - promote-release
     runs-on: 'ubuntu-latest'
@@ -1061,7 +1180,9 @@ jobs:
           R_BUILD: ${{ needs.build-containers.result }}
           R_TESTS: ${{ needs.functional-tests.result }}
           R_PUBLISH: ${{ needs.publish-ghcr.result }}
-          R_SCAN: ${{ needs.sign-attest-scan.result }}
+          R_SIGN: ${{ needs.sign-attest.result }}
+          R_SBOM: ${{ needs.sbom.result }}
+          R_AUDIT: ${{ needs.audit.result }}
           R_ATTACH: ${{ needs.release-attach.result }}
           R_PROMOTE: ${{ needs.promote-release.result }}
         run: |
@@ -1074,7 +1195,9 @@ jobs:
               echo "| Image builds | ${R_BUILD} |"
               echo "| Functional tests | ${R_TESTS} |"
               echo "| GHCR publish | ${R_PUBLISH} |"
-              echo "| Sign + SBOM + Grype | ${R_SCAN} |"
+              echo "| Sign + provenance attest | ${R_SIGN} |"
+              echo "| SBOM generate + attest | ${R_SBOM} |"
+              echo "| SBOM audit (Grype) | ${R_AUDIT} |"
               echo "| Release assets | ${R_ATTACH} |"
               echo "| Release promote | ${R_PROMOTE} |"
               echo ""

@@ -342,47 +342,25 @@ jobs:
         run: docker manifest inspect "${IMAGE}:${TAG}"
       # yamllint enable rule:line-length
 
-  ### PR SBOM + vulnerability scan ###
+  ### PR SBOM generation ###
   #
-  # Mirrors release.yaml's sign-attest-scan job for PR / dispatch
-  # runs, stripped of the registry-bound supply-chain steps (cosign
-  # signing, attest-build-provenance, attest-sbom). The remaining
-  # steps -- SBOM generation, Grype scan, SARIF upload, artifact
-  # upload -- operate purely against the locally-loaded image and
-  # need no registry credentials. AMD64 only: Anchore's SBOM action
-  # against a multi-arch manifest scans the host-platform variant,
-  # so the release workflow effectively scans amd64 too. Scanning
-  # both arches on PR would double runtime for marginal additional
-  # CVE coverage (CVEs at the OS-package layer are nearly always
-  # arch-agnostic).
-  pr-sbom-scan:
-    name: 'SBOM + Scan: ${{ matrix.component }}'
+  # Generates an SPDX SBOM for each component image (amd64 only --
+  # see the audit job's rationale below). The job is intentionally
+  # narrow: download the build artifact, load it, generate the SBOM,
+  # upload as artifact. Auditing the SBOM with Grype lives in the
+  # dedicated pr-audit job below so a Grype-detected CVE is
+  # attributed to the audit step, not to SBOM generation.
+  pr-sbom:
+    name: 'SBOM: ${{ matrix.component }}'
     needs: [build-containers]
     runs-on: 'ubuntu-latest'
     permissions:
       contents: read
-      # github/codeql-action/upload-sarif publishes Grype findings
-      # to the repository's code-scanning alerts. On PRs from forks
-      # this scope is silently downgraded to read; the upload step
-      # is wrapped in continue-on-error so the scan still produces
-      # the downloadable SARIF artifact in that case.
-      security-events: write
-    timeout-minutes: 15
+    timeout-minutes: 10
     strategy:
-      # Don't short-circuit other components if one's Grype scan
-      # finds CVEs at the configured threshold; we want SBOMs and
-      # SARIF for every component in a single PR run.
       fail-fast: false
       matrix:
         component: ['client', 'server', 'bridge']
-    env:
-      # 'low' matches release.yaml so PR feedback and release
-      # gating use the same severity bar. Set the
-      # NO_BLOCK_AUDIT_FAIL repository variable to 'true' to
-      # soft-fail when a transitive CVE in a third-party
-      # dependency is unavoidable; the SARIF and step-summary
-      # report still publishes.
-      GRYPE_FAIL_ON: 'low'
     steps:
       # yamllint disable-line rule:line-length
       - uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411  # v2.19.4
@@ -412,10 +390,71 @@ jobs:
           image: ${{ matrix.component }}:linux-amd64
           format: spdx-json
           output-file: sbom-${{ matrix.component }}.spdx.json
-          # The SBOM action's own artifact upload duplicates the
-          # explicit upload-artifact step below; disabling it
-          # keeps all assets under one consistent naming pattern.
+          # The SBOM action's own artifact upload is disabled in
+          # favour of the explicit upload-artifact step below, so
+          # all assets land under one consistent naming pattern
+          # (pr-sbom-<component>) that the audit job can target.
           upload-artifact: false
+
+      - name: 'Upload SBOM artifact'
+        # yamllint disable-line rule:line-length
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: pr-sbom-${{ matrix.component }}
+          path: sbom-${{ matrix.component }}.spdx.json
+          retention-days: 14
+          if-no-files-found: error
+
+  ### PR SBOM audit (Grype) ###
+  #
+  # Audits the SBOM produced by pr-sbom with Grype, surfacing
+  # vulnerabilities at or above the configured severity. Lives in a
+  # dedicated job so a failed audit is clearly attributed to the
+  # vulnerability scan rather than to SBOM generation. AMD64 only:
+  # Anchore's SBOM action against a multi-arch manifest scans the
+  # host-platform variant, so the release workflow effectively
+  # scans amd64 too -- doubling matrix entries for ARM64 would just
+  # double runtime for marginal CVE coverage at the OS-package
+  # layer.
+  pr-audit:
+    name: 'Audit SBOM: ${{ matrix.component }}'
+    needs: [pr-sbom]
+    runs-on: 'ubuntu-latest'
+    permissions:
+      contents: read
+      # github/codeql-action/upload-sarif publishes Grype findings
+      # to the repository's code-scanning alerts. On PRs from forks
+      # this scope is silently downgraded to read; the upload step
+      # is wrapped in continue-on-error so the scan still produces
+      # the downloadable SARIF artifact in that case.
+      security-events: write
+    timeout-minutes: 10
+    strategy:
+      # Don't short-circuit other components if one's Grype scan
+      # finds CVEs at the configured threshold; we want SARIF for
+      # every component in a single PR run.
+      fail-fast: false
+      matrix:
+        component: ['client', 'server', 'bridge']
+    env:
+      # 'low' matches release.yaml so PR feedback and release
+      # gating use the same severity bar. Set the
+      # NO_BLOCK_AUDIT_FAIL repository variable to 'true' to
+      # soft-fail when a transitive CVE in a third-party
+      # dependency is unavoidable; the SARIF and step-summary
+      # report still publishes.
+      GRYPE_FAIL_ON: 'low'
+    steps:
+      # yamllint disable-line rule:line-length
+      - uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411  # v2.19.4
+        with:
+          egress-policy: 'audit'
+
+      - name: 'Download SBOM artifact'
+        # yamllint disable-line rule:line-length
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+        with:
+          name: pr-sbom-${{ matrix.component }}
 
       - name: 'Install Grype'
         id: grype
@@ -489,14 +528,13 @@ jobs:
           # main-branch / released-image alert stream.
           category: pr-grype-${{ matrix.component }}
 
-      - name: 'Upload SBOM and Grype reports as workflow artifact'
+      - name: 'Upload Grype reports as workflow artifact'
         if: always()
         # yamllint disable-line rule:line-length
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
-          name: pr-sbom-and-scan-${{ matrix.component }}
+          name: pr-grype-${{ matrix.component }}
           path: |
-            sbom-${{ matrix.component }}.spdx.json
             grype-${{ matrix.component }}.sarif
             grype-${{ matrix.component }}.json
             grype-${{ matrix.component }}.txt
@@ -1092,7 +1130,8 @@ jobs:
     needs: [
       build-containers,
       publish-ghcr,
-      pr-sbom-scan,
+      pr-sbom,
+      pr-audit,
       functional-tests
     ]
     if: always()
@@ -1111,8 +1150,10 @@ jobs:
             echo "|-----|--------|"
             echo "| Build (matrix: amd64 + arm64) |" \
               " ${{ needs.build-containers.result }} |"
-            echo "| SBOM + Grype (matrix: 3 components) |" \
-              " ${{ needs.pr-sbom-scan.result }} |"
+            echo "| SBOM generation (matrix: 3 components) |" \
+              " ${{ needs.pr-sbom.result }} |"
+            echo "| SBOM audit / Grype (matrix: 3 components) |" \
+              " ${{ needs.pr-audit.result }} |"
             echo "| Functional Tests (matrix: amd64 + arm64) |" \
               " ${{ needs.functional-tests.result }} |"
             echo ""
@@ -1130,12 +1171,16 @@ jobs:
             echo ""
 
             echo "### Supply-chain scan"
-            echo "- **Status**: ${{ needs.pr-sbom-scan.result }}"
+            echo "- **SBOM generation**: ${{ needs.pr-sbom.result }}"
+            echo "- **SBOM audit (Grype)**: ${{ needs.pr-audit.result }}"
             echo "- **Includes**: SPDX SBOM (anchore/sbom-action)" \
-              "and Grype vulnerability scan per component image"
-            echo "- **Artifacts**: pr-sbom-and-scan-COMPONENT per" \
-              "component (SPDX JSON + Grype SARIF/JSON/TXT," \
-              "14-day retention)"
+              "and Grype vulnerability scan per component image," \
+              "split into separate jobs so reviewers can" \
+              "distinguish SBOM-generation failures from audit" \
+              "findings at a glance"
+            echo "- **Artifacts**: pr-sbom-COMPONENT (SPDX JSON," \
+              "14-day retention) and pr-grype-COMPONENT (SARIF +" \
+              "JSON + TXT, 14-day retention) per component"
             echo "- **Code scanning**: SARIF uploaded under category" \
               "pr-grype-COMPONENT for same-repo PRs; fork PRs fall" \
               "back to the workflow-run artifacts above"
