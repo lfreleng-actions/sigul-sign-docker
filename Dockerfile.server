@@ -2,7 +2,11 @@
 # SPDX-FileCopyrightText: 2025 The Linux Foundation
 
 # Simplified Dockerfile for sigul server using dedicated build scripts
-FROM fedora:44
+# Base image is pinned by digest in addition to tag so a tag
+# re-point cannot silently change the base layer (OpenSSF Scorecard
+# Pinned-Dependencies). Dependabot's docker ecosystem keeps the
+# digest in sync with the upstream fedora:44 tag.
+FROM fedora:44@sha256:6c75d5bf57cb0fa5aa4b92c6a83c86c791644496d9ac230de7711f5b8ec3b898
 
 LABEL maintainer="releng@linuxfoundation.org"
 LABEL org.opencontainers.image.title="Sigul Server"

@@ -38,10 +38,13 @@ concurrency:
   group: "${{ github.workflow }}-${{ github.ref }}"
   cancel-in-progress: true
 
+# Workflow-level permissions are intentionally minimal. Each job
+# below declares the extra scopes it needs (e.g. publish-ghcr adds
+# `packages: write`, build-containers adds `actions: write` for cache
+# deletion), which keeps the GITHUB_TOKEN tightly scoped per job and
+# satisfies the OpenSSF Scorecard `Token-Permissions` check.
 permissions:
   contents: read
-  packages: write
-  actions: write  # Required for cache deletion when clear_cache is true
 
 env:
   REGISTRY: ghcr.io
