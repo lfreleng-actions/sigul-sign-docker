@@ -183,6 +183,28 @@ def test_lease_released_on_exit(directory: str) -> None:
     )
 
 
+def test_lease_leaves_no_inner_report_behind(directory: str) -> None:
+    """A long report inside a lease must end with the lease (#38).
+
+    A phase that ends on a long read reports that read's bound inside
+    its lease. Once the phase is over, the read is too: if its bound
+    outlived the lease, a bridge wedged straight after the phase would
+    keep a fresh heartbeat for that long, and be replaced that late.
+    """
+    path = os.path.join(directory, "inner")
+    hb = _started(path)
+    with hb.lease(100 * INTERVAL):
+        hb.progress(30 * INTERVAL)  # the phase's last, long read
+    time.sleep(12 * INTERVAL)  # then the main loop wedges
+    age = _age(path)
+    check(
+        "a report made inside a lease ends with the lease",
+        age > 6 * INTERVAL,
+        f"age {age:.2f}s, {12 * INTERVAL:.1f}s after the lease, whose last "
+        + f"report of {30 * INTERVAL:.1f}s must not outlive it",
+    )
+
+
 def test_hook_default_is_inert() -> None:
     """The server and client share double_tls and never set the hook."""
     check(
@@ -239,6 +261,7 @@ def main() -> int:
         test_withheld_once_overdue(directory)
         test_lease_survives_nested_reports(directory)
         test_lease_released_on_exit(directory)
+        test_lease_leaves_no_inner_report_behind(directory)
         test_hook_default_is_inert()
         test_hook_feeds_heartbeat(directory)
     print()

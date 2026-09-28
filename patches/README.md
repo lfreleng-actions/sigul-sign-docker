@@ -796,6 +796,33 @@ went from +5.2 kB per request to +0.3 kB with this patch, and to +0.0
 with both fixes. The `tracemalloc` delta over 300 signing requests
 fell from 1.46 MB to 2.4 kB.
 
+### 17-fix-bridge-lease-exit-deadline.patch
+
+**Status:** MEDIUM - a wedge straight after a long phase is caught late
+**Upstream Status:** Local fork (upstream Sigul is unmaintained; see below)
+**Affects:** Bridge
+
+**Problem:**
+Patch 15's lease ended by keeping the later of the idle slice and the
+last deadline reported. But the last report was made *inside* the lease,
+for a wait the phase had finished: a phase ending on a 120 s read left
+120 s of heartbeat behind it. A bridge that wedged straight after such a
+phase kept a fresh heartbeat for that long, and liveness replaced it
+about two minutes late (#38).
+
+**Fix:**
+A lease ends by resetting the ordinary deadline to the idle slice.
+Leases are taken on the main loop around whole handler phases, so when
+one ends no wait outside it is still running; any other lease still
+counts through its own deadline.
+
+**Test:** `test/test_bridge_heartbeat.py` reports a long wait inside a
+lease, leaves it, stops reporting, and requires the heartbeat withheld
+within the idle bound. Without the patch it is still fresh 2.4 s later
+(scaled timings); with it, it goes stale. The existing lease checks -
+that a short report inside a lease does not cut it short, and that a
+lease ends with its block - still pass.
+
 ## Applying Patches
 
 The Docker build process automatically applies these patches:
