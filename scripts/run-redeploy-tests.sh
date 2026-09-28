@@ -130,6 +130,17 @@ deploy_legacy() {
         && ./scripts/setup-client.sh >/dev/null && new_key_signs
 }
 
+# Wait up to $2 seconds for container $1 to report healthy.
+wait_for_healthy() {
+    local deadline=$(( $(date +%s) + $2 ))
+    while (( $(date +%s) < deadline )); do
+        [[ "$(docker inspect -f '{{.State.Health.Status}}' "$1" 2>/dev/null)" == "healthy" ]] \
+            && return 0
+        sleep 3
+    done
+    return 1
+}
+
 running_under() {
     [[ "$(docker inspect -f '{{index .Config.Labels "com.docker.compose.project"}}' \
             sigul-server 2>/dev/null)" == "$1" \
@@ -142,6 +153,63 @@ mkdir -p test-artifacts
 # compose file pinned one.
 LEGACY_PROJECT="sigul-docker-k8s"
 
+# A release from before #37, which kept the server's database and GnuPG
+# home on the container's writable layer. Its images run their own
+# cert-init and entrypoint, so the stack they build is the real thing.
+RELEASE_TAG="${SIGUL_REDEPLOY_FROM_TAG:-v2.5.0}"
+RELEASE_REGISTRY="${SIGUL_REDEPLOY_FROM_REGISTRY:-ghcr.io/lfreleng-actions/sigul-docker-k8s}"
+
+phase "0: upgrading from ${RELEASE_TAG} keeps keys it kept off the volume"
+release_ok=true
+for component in server bridge client; do
+    docker pull -q "${RELEASE_REGISTRY}/${component}:${RELEASE_TAG}" >/dev/null 2>&1 \
+        || release_ok=false
+done
+if [[ "$release_ok" != "true" ]]; then
+    fail "could not pull the ${RELEASE_TAG} images to upgrade from"
+else
+    if SIGUL_SERVER_IMAGE="${RELEASE_REGISTRY}/server:${RELEASE_TAG}" \
+            SIGUL_BRIDGE_IMAGE="${RELEASE_REGISTRY}/bridge:${RELEASE_TAG}" \
+            SIGUL_CLIENT_IMAGE="${RELEASE_REGISTRY}/client:${RELEASE_TAG}" \
+            deploy release --force-clean-volumes \
+            && SIGUL_CLIENT_IMAGE="${RELEASE_REGISTRY}/client:${RELEASE_TAG}" \
+                ./scripts/setup-client.sh >/dev/null; then
+        pass "${RELEASE_TAG} stack deployed"
+    else
+        fail "${RELEASE_TAG} deploy failed - see test-artifacts/redeploy-release.log"
+        exit 1
+    fi
+    release_key="$(create_key)" || { fail "could not create a key on ${RELEASE_TAG}"; exit 1; }
+    if docker exec sigul-server test -s /var/lib/sigul/server.sqlite \
+            && docker exec sigul-server sh -c 'test -n "$(ls -A /var/lib/sigul/gnupg)"'; then
+        pass "${RELEASE_TAG} keeps its database and keys on the writable layer, as expected"
+    else
+        fail "${RELEASE_TAG} did not keep its state on the writable layer - the test proves nothing"
+    fi
+    if deploy from-release; then
+        pass "a plain deploy of this branch over ${RELEASE_TAG} succeeded"
+    else
+        fail "the deploy over ${RELEASE_TAG} failed - see test-artifacts/redeploy-from-release.log"
+    fi
+    if sign_and_verify "$release_key"; then
+        pass "a key created on ${RELEASE_TAG} still signs after the upgrade, and gpg verifies it"
+    else
+        fail "the key created on ${RELEASE_TAG} was lost in the upgrade"
+    fi
+    # What the server is configured with, not only what is on the volume:
+    # a copy there proves nothing if server.conf still names the old
+    # paths, as an upgraded Compose stack's did.
+    if docker exec sigul-server test -s /var/lib/sigul/server/server.sqlite \
+            && docker exec sigul-server grep -qx \
+                'database-path: /var/lib/sigul/server/server.sqlite' /etc/sigul/server.conf \
+            && docker exec sigul-server grep -qx \
+                'gnupg-home: /var/lib/sigul/server/gnupg' /etc/sigul/server.conf; then
+        pass "the server now keeps its database and GnuPG home on the volume"
+    else
+        fail "the server does not keep its database and GnuPG home on the volume after the upgrade"
+    fi
+fi
+
 phase "1: plain upgrade over a running legacy stack keeps its state"
 if deploy_legacy upgrade-base && running_under "$LEGACY_PROJECT"; then
     pass "legacy stack deployed and a client signs"
@@ -150,6 +218,7 @@ else
     exit 1
 fi
 legacy_ca="$(ca_fingerprint)"
+old_key="$(create_key)" || { fail "could not create a key on the legacy stack"; exit 1; }
 
 if deploy upgrade; then
     pass "plain redeploy over the legacy stack succeeded"
@@ -168,13 +237,17 @@ else
 fi
 # The client provisioned before the upgrade, not re-provisioned: it is
 # still trusted, and its recorded credentials still open the server.
-# A key created before the upgrade is not checked: the Compose server
-# keeps its database and GnuPG home off the volume, so recreating it
-# loses them however the volumes are handled (#37).
 if new_key_signs; then
     pass "the client provisioned before the upgrade still signs, and gpg verifies it"
 else
     fail "the client provisioned before the upgrade can no longer sign"
+fi
+# And the key made before it: the server's database and GnuPG home are
+# on the volumes the upgrade carried over (#37).
+if sign_and_verify "$old_key"; then
+    pass "a key created before the upgrade still signs, and gpg verifies it"
+else
+    fail "the key created before the upgrade no longer signs"
 fi
 if [[ -n "$(docker volume ls -q --filter "label=com.docker.compose.project=${LEGACY_PROJECT}")" ]]; then
     pass "the legacy volumes are kept as a backup"
@@ -222,7 +295,27 @@ else
     fail "legacy project resources survived: $(echo "$left" | tr '\n' ' ')"
 fi
 
-phase "3: the redeployed stack serves"
+phase "3: a recreated server keeps its keys"
+# Recreating the container discards its writable layer; a server whose
+# database or GnuPG home lived there lost every user and key (#37).
+./scripts/setup-client.sh >/dev/null || { fail "could not provision a client"; exit 1; }
+recreate_key="$(create_key)" || { fail "could not create a key before recreating"; exit 1; }
+if NSS_PASSWORD="$(cat test-artifacts/nss-password)" \
+        SIGUL_ADMIN_PASSWORD="$(cat test-artifacts/admin-password)" \
+        docker compose -f docker-compose.sigul.yml up -d --force-recreate --no-deps \
+            sigul-server > test-artifacts/redeploy-recreate.log 2>&1 \
+        && wait_for_healthy sigul-server 180; then
+    pass "the server container was recreated"
+else
+    fail "the server container could not be recreated - see test-artifacts/redeploy-recreate.log"
+fi
+if sign_and_verify "$recreate_key"; then
+    pass "a key created before the recreation still signs, and gpg verifies it"
+else
+    fail "a key created before the recreation was lost with the container"
+fi
+
+phase "4: the redeployed stack serves"
 if ./scripts/setup-client.sh >/dev/null && new_key_signs; then
     pass "a freshly provisioned client signs, and gpg verifies it"
 else

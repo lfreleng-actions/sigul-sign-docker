@@ -539,7 +539,10 @@ bridge-port: 44333
 lenient-username-check: yes
 
 [database]
-database-path: /var/lib/sigul/server.sqlite
+# On the server data volume (/var/lib/sigul/server), like gnupg-home
+# below: anywhere else is the container's writable layer, lost - with
+# every user and signing key - whenever the container is recreated.
+database-path: /var/lib/sigul/server/server.sqlite
 
 [daemon]
 unix-user: sigul
@@ -556,6 +559,9 @@ nss-password: ${NSS_PASSWORD}
 nss-min-tls: tls1.2
 
 [gnupg]
+# The directory entrypoint-server.sh prepares, on the data volume. Left
+# unset, Sigul defaults to /var/lib/sigul/gnupg, off the volume.
+gnupg-home: /var/lib/sigul/server/gnupg
 gnupg-bin: /usr/bin/gpg2
 gnupg-key-type: RSA
 gnupg-key-length: 4096

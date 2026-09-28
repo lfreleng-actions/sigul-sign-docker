@@ -28,8 +28,10 @@ The stack is three containers built from `fedora:44`:
 publishes both. For local development you typically build only the platform
 matching your host.
 
-The server uses **SQLite** (default location `/var/lib/sigul/server.sqlite`)
-for the user/key database. There is no PostgreSQL dependency.
+The server uses **SQLite** (at `/var/lib/sigul/server/server.sqlite`,
+on the server data volume) for the user/key database, and keeps its
+GnuPG home at `/var/lib/sigul/server/gnupg` on the same volume. There
+is no PostgreSQL dependency.
 
 The PKI is bridge-centric: the bridge container generates a self-signed CA
 on first boot and signs the server and client certificates. The

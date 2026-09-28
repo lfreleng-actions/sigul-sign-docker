@@ -960,6 +960,109 @@ _release_deploy_lock() {
     HELD_ADOPTION_LOCK=""
 }
 
+# Carry a server's state off its writable layer before the container
+# is replaced.
+#
+# Releases before the server's database and GnuPG home were configured
+# under /var/lib/sigul/server kept them at /var/lib/sigul/server.sqlite
+# and /var/lib/sigul/gnupg, on the container's writable layer, which is
+# discarded when the container is recreated or removed. Every deploy
+# replaces it, so this is the only moment the data can be saved: while
+# the old container - running or stopped - still exists. Each is copied
+# into the data volume that container mounts, and only if the volume
+# holds none of its own; the entrypoint then finds it where the new
+# configuration expects it, and an upgrade carries the volume across.
+preserve_server_state() {
+    local container=sigul-server volume out
+    # docker container inspect, not docker inspect: the generic form's
+    # "not found" text changed case in Docker 29 ("error: no such
+    # object"), which would read as a failure and stop a first deploy.
+    if ! out=$(docker container inspect "$container" 2>&1 >/dev/null); then
+        case "$out" in
+            *[Nn]"o such container"* | *[Nn]"o such object"*) return 0 ;;
+        esac
+        error "Could not inspect ${container}: ${out}"
+        return 1
+    fi
+    volume=$(docker container inspect -f \
+        '{{range .Mounts}}{{if eq .Destination "/var/lib/sigul/server"}}{{.Name}}{{end}}{{end}}' \
+        "$container") || { error "Could not read the mounts of ${container}"; return 1; }
+    [[ -n "$volume" ]] || return 0
+
+    # Stop it first: a consistent copy of the database needs its writer
+    # gone, and an inventory of a live server could miss state written
+    # before the stop - a first key in a GnuPG home that was empty when
+    # looked at. The caller runs this only once every refusal has
+    # passed, and the container is about to be replaced in any case.
+    if [[ "$(docker container inspect -f '{{.State.Running}}' "$container")" == "true" ]] \
+            && ! docker stop -t 10 "$container" >/dev/null; then
+        error "Could not stop ${container} to preserve its state; nothing has been removed"
+        return 1
+    fi
+
+    # Inventory and copy in one pass, fail closed: each item is copied
+    # out, confirmed absent, or the deploy stops. docker cp says "Could
+    # not find the file" only when it is missing; any other failure must
+    # not be taken for "nothing to keep".
+    #
+    # Streamed straight from the old container into a helper that writes
+    # the volume: the GnuPG home holds private signing keys, which must
+    # never land on the host, where an interrupted deploy would leave
+    # them outside any managed storage. Only error text touches the host.
+    local item err msg pst
+    err=$(mktemp) && msg=$(mktemp) || return 1
+    # Expanded now, as the names are local; the trap clears itself so it
+    # does not outlive this call.
+    # shellcheck disable=SC2064
+    trap "rm -f '$err' '$msg'; trap - RETURN" RETURN
+    for item in server.sqlite gnupg; do
+        # Status taken in the || branch: a failing stage must be judged
+        # here, not end the deploy under set -e before it is reported.
+        pst=(0 0)
+        docker cp "${container}:/var/lib/sigul/${item}" - 2>"$err" \
+            | docker run --rm -i --user 0 --entrypoint sh \
+                -v "${volume}:/var/lib/sigul/server" \
+                "${SIGUL_SERVER_IMAGE}" -c '
+                    stage=$(mktemp -d)
+                    tar -x -C "$stage" 2>/dev/null || exit 4   # no stream
+                    src="$stage/$1" target="/var/lib/sigul/server/$1"
+                    # A directory counts by its entries, never its size:
+                    # -s is true of any directory, and the image seeds an
+                    # empty gnupg into every new volume.
+                    holds() {
+                        if [ -d "$1" ]; then [ -n "$(ls -A "$1")" ]; else [ -s "$1" ]; fi
+                    }
+                    if ! holds "$src"; then
+                        echo "empty; nothing to keep"; exit 0
+                    fi
+                    if holds "$target"; then
+                        echo "already on the volume; keeping that"; exit 0
+                    fi
+                    # Copied beside the target and renamed into place,
+                    # which is atomic on the volume: a copy cut short
+                    # must never be left where the next run would take
+                    # it for the volume holding its own.
+                    next="/var/lib/sigul/server/.$1.preserving"
+                    rm -rf "$next" && cp -a "$src" "$next" \
+                        && chown -R 1000:1000 "$next" && sync \
+                        && rm -rf "$target" && mv "$next" "$target" \
+                        && echo copied' sh "$item" \
+                >"$msg" 2>&1 || pst=("${PIPESTATUS[@]}")
+        if [[ ${pst[0]} -ne 0 ]]; then
+            grep -q "Could not find the file" "$err" && continue
+            error "Could not copy ${item} out of ${container}: $(cat "$err")"
+            error "Nothing has been removed; ${container} is stopped, not deleted."
+            return 1
+        fi
+        if [[ ${pst[1]} -ne 0 ]]; then
+            error "Could not write ${item} into ${volume}: $(cat "$msg")"
+            error "Nothing has been removed; ${container} is stopped, not deleted."
+            return 1
+        fi
+        log "Preserving ${container}'s ${item} in ${volume}: $(cat "$msg")"
+    done
+}
+
 # Take the host-wide deploy lock <marker> for project <own>.
 #
 # Creating a volume that already exists succeeds and keeps its first
@@ -1276,6 +1379,11 @@ retire_foreign_projects() {
                     "$(clean_record "$project")" >/dev/null; then
             error "Could not record the clean of '${project}' before starting it"
             return 1
+        fi
+        # Every refusal is behind us; only now may the old server stop.
+        # A clean discards its state anyway.
+        if [[ "$FORCE_CLEAN_VOLUMES" != "true" ]]; then
+            preserve_server_state || return 1
         fi
         warn "Stack from Compose project '${project}' holds this stack's names; removing it"
         # Every profile, so a debug, monitoring or test container of the
@@ -1650,6 +1758,13 @@ deploy_sigul_services() {
 
     # Start cert-init container first to pre-generate all certificates
     log "Starting certificate initialization (cert-init)..."
+    # The server container is about to be recreated. Every refusal has
+    # already been checked, so its writable-layer state can be saved now
+    # without a rejected deploy ever stopping a working server. A clean
+    # discards that state anyway.
+    if [[ "$FORCE_CLEAN_VOLUMES" != "true" ]]; then
+        preserve_server_state || return 1
+    fi
     if ${compose_cmd} -f "${COMPOSE_FILE}" up cert-init; then
         success "Certificate initialization completed"
 

@@ -424,8 +424,8 @@ done
 note "Wiping the server's gnupg-home to defeat the upstream bug."
 note "This is the same operation a release engineer would perform"
 note "to recover from a half-deleted key state in production."
-showrun "docker exec sigul-server bash -c 'rm -rf /var/lib/sigul/gnupg/* \
-    /var/lib/sigul/gnupg/.* 2>/dev/null; true'"
+showrun "docker exec sigul-server bash -c 'rm -rf /var/lib/sigul/server/gnupg/* \
+    /var/lib/sigul/server/gnupg/.* 2>/dev/null; true'"
 
 # ----------------------------------------------------------------------
 # PHASE 1: Key lifecycle

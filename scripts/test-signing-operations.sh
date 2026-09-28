@@ -102,20 +102,20 @@ fi
 # Test 5: Verify server database
 echo ""
 echo "Test 5: Checking server database integrity..."
-if docker exec sigul-server test -f /var/lib/sigul/server.sqlite; then
-    if docker exec sigul-server sqlite3 /var/lib/sigul/server.sqlite "PRAGMA integrity_check;" 2>&1 | grep -q "ok"; then
+if docker exec sigul-server test -f /var/lib/sigul/server/server.sqlite; then
+    if docker exec sigul-server sqlite3 /var/lib/sigul/server/server.sqlite "PRAGMA integrity_check;" 2>&1 | grep -q "ok"; then
         pass "Server database is healthy"
     else
         fail "Server database integrity check failed"
     fi
 else
-    fail "Server database not found at /var/lib/sigul/server.sqlite"
+    fail "Server database not found at /var/lib/sigul/server/server.sqlite"
 fi
 
 # Test 6: Verify GnuPG home
 echo ""
 echo "Test 6: Checking server GnuPG configuration..."
-if docker exec sigul-server test -d /var/lib/sigul/gnupg; then
+if docker exec sigul-server test -d /var/lib/sigul/server/gnupg; then
     pass "GnuPG home directory exists"
 else
     fail "GnuPG home directory not found"
