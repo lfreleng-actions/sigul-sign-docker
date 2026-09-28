@@ -882,6 +882,61 @@ fast client, one reading its reply quickly, a slow client inside its
 window, one idle while its caller waits elsewhere, and a buffer given no
 floor are all kept.
 
+### 19-fix-server-liveness-heartbeat.patch
+
+**Status:** HIGH - a wedged server is replaced late, reported Ready
+**Upstream Status:** Local fork (upstream Sigul is unmaintained; see below)
+**Affects:** Server; the chart's server probes depend on it
+
+**Problem:**
+The server's probes checked for an established connection to the
+bridge, which a frozen server keeps. Frozen, it stayed `Ready` for about
+four minutes and liveness replaced it after about five and a half,
+against a bound of three (#33). The bridge had the same blind spot until
+patch 15 gave it a heartbeat, but that design does not carry over: the
+server forks for every request, and a publisher thread in a forking
+process risks a child inheriting a lock nobody will release.
+
+**Fix:**
+The supervising parent, which forks each request child and waits for
+it, now waits a second at a time with `waitpid(WNOHANG)` - still reaping
+orphans, as patch 08 requires - and rewrites
+`/run/sigul_server.heartbeat` between slices. Each slice is a `poll()`
+on a pidfd for the child, so it ends the moment the child exits: the
+next request child is forked only once the wait returns, and a fixed
+one-second sleep added 0.6 s to the median request (0.40 s to 1.01 s,
+measured end to end). Where no pidfd can be had, the slice is a plain
+sleep. The heartbeat is withheld while:
+
+- the request child is stopped (`/proc/<pid>/stat` state `T`); a frozen
+  container stops the parent as well, and goes stale regardless;
+- a request child has held no ESTABLISHED connection to the bridge for
+  fifty seconds. That is the double-TLS teardown wedge patch 06 fixes -
+  a blocked child, a parent waiting on it, nothing reconnecting - for
+  which the old connection probe was the backstop, restarting the
+  server within two minutes. The fifty seconds leave the rest of those
+  two minutes to the heartbeat's thirty-second staleness and three
+  liveness failures ten seconds apart: 111 s at worst.
+
+A child waiting for a request is connected and asleep, which is normal
+however long it lasts. The parent's sleeps between reconnection
+attempts beat too, so a bridge outage does not cascade into a server
+restart. The heartbeat is removed at startup, as the bridge's is.
+
+The chart change that uses it is outside the patch series. Liveness
+reads the heartbeat's age (`-5 ≤ age ≤ 30`, three failures ten seconds
+apart), readiness requires a fresh heartbeat as well as the connection,
+and startup requires the heartbeat to exist.
+
+**Test:** `test/test_server_heartbeat.py` runs the real supervisor
+functions over real forked children. The heartbeat stays fresh while a
+child waits, while a child holds its bridge connection, and while the
+parent sleeps between reconnections. It goes stale while a child is
+stopped, and once a child has held no connection past the bound. Exit
+statuses still come back, orphans are still reaped, a child's exit ends
+the wait within a fraction of a slice, and the wait still works where
+no pidfd can be had.
+
 ## Applying Patches
 
 The Docker build process automatically applies these patches:
