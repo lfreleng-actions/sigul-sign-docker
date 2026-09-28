@@ -173,7 +173,7 @@ jobs:
 
       - name: 'Set up Docker Buildx'
         # yamllint disable-line rule:line-length
-        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e  # v4.3.0
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069  # v4.4.1
 
       - name: 'Debug cache-clearing input'
         shell: bash
@@ -365,7 +365,7 @@ jobs:
 
       - name: 'Set up Docker Buildx'
         # yamllint disable-line rule:line-length
-        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e  # v4.3.0
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069  # v4.4.1
 
       - name: 'Log in to GitHub Container Registry'
         # yamllint disable-line rule:line-length
@@ -793,7 +793,7 @@ jobs:
 
       - name: 'Set up Docker Buildx'
         # yamllint disable-line rule:line-length
-        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e  # v4.3.0
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069  # v4.4.1
 
       - name: 'Detect runner architecture'
         id: runner-arch
