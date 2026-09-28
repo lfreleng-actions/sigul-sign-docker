@@ -1933,14 +1933,8 @@ deploy_sigul_services() {
     success "Sigul bridge deployed and ready (took $((attempt-1)) attempts)"
 
     success "All Sigul services deployed successfully"
-
-    # This stack's containers now carry its names, so another deploy
-    # can see it; the upgrade that held the lock is done. On any failure
-    # before this point the marker stays, and blocks further deploys
-    # with the way back.
-    if [[ -n "$HELD_ADOPTION_LOCK" ]]; then
-        _release_deploy_lock
-    fi
+    # The lock is released by the caller, once the deployment has also
+    # been verified: until then another deploy must not act on it.
 }
 
 # Comprehensive infrastructure health verification
@@ -2299,6 +2293,12 @@ deploy_infrastructure() {
 
     deploy_sigul_services || { error "Sigul services deployment failed"; return 1; }
     verify_infrastructure || { error "Infrastructure verification failed"; return 1; }
+    # Deployed and verified: only now may another deploy act on this
+    # stack. On any failure above the lock stays, as it does for every
+    # failed deploy, and blocks the next one with the way back.
+    if [[ -n "${HELD_ADOPTION_LOCK:-}" ]]; then
+        _release_deploy_lock || return 1
+    fi
 
     local end_time
     end_time=$(date +%s)
