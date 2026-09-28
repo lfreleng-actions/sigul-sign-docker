@@ -1211,6 +1211,27 @@ jobs:
             "${SIGUL_BRIDGE_IMAGE}" \
             /test/test_bridge_memory.py
 
+      - name: 'Test the bridge client throughput floor'
+        shell: bash
+        env:
+          SIGUL_BRIDGE_IMAGE: >-
+            bridge-${{
+              steps.runner-arch.outputs.platform-id
+            }}-image:test
+        run: |
+          # Regression guard for patches/18. The bridge serves one
+          # request at a time, and a client trickling its data held the
+          # only slot for as long as it liked. Checks that a trickling
+          # client is shed once its grace is spent, and that a fast
+          # client, a slow one inside its grace, and one idle while the
+          # server works are all kept.
+          docker run --rm \
+            --user 1000:1000 \
+            -v "${PWD}/test:/test:ro" \
+            --entrypoint python3 \
+            "${SIGUL_BRIDGE_IMAGE}" \
+            /test/test_bridge_slow_client.py
+
       - name: 'Test a clean redeploy over the running stack'
         shell: bash
         env:

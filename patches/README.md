@@ -823,6 +823,65 @@ within the idle bound. Without the patch it is still fresh 2.4 s later
 that a short report inside a lease does not cut it short, and that a
 lease ends with its block - still pass.
 
+### 18-fix-bridge-client-throughput-floor.patch
+
+**Status:** HIGH - one slow client can hold signing for everyone
+**Upstream Status:** Local fork (upstream Sigul is unmaintained; see below)
+**Affects:** Bridge (`double_tls.OuterBuffer`, used with a floor only
+there)
+
+**Problem:**
+The bridge serves one request at a time. Patch 11's idle deadline sheds
+a client that goes silent, but it resets on any activity, so a client
+that trickles is never shed: at a byte a minute it holds the only slot
+forever, and every other signing request queues behind it (#31).
+
+**Fix:**
+`OuterBuffer` takes an optional throughput floor. It measures bytes
+moved against time spent inside its own receives and sends - waiting on
+that peer - and never while its caller is elsewhere. The rate is judged
+over the most recent window of that waiting, once there has been that
+much: a rolling window, not a running average, so that a fast start
+cannot buy a slow finish - a 64 MiB burst would otherwise cover hours
+of trickle. Bytes are kept by when their transfer completed on that
+clock of waiting, in slices a sixtieth of the window long, so they leave
+the window one window after they arrive however long the waits around
+them. A peer that completed too few bytes within the window raises
+`SlowPeerError`, a kind of `IdleTimeoutError`, so the bridge logs it and
+drops both peers as it does an idle one.
+
+The bridge gives only the client's buffer a floor: 4 KiB/s after 60 s.
+Time the bridge spends waiting on the server - signing, GPG, Koji - is
+never charged to the client, so no slow server-side operation can trip
+it. The floor is a sixteenth of the slowest link the soak throttles
+clients to, and far below any real CI network.
+
+The inner stream does not pass through those buffers: the bridge relays
+it on the raw sockets, where only patch 11's idle deadline applied, so a
+client could trickle through it instead. It carries only the inner TLS
+handshake and a few small fields - the client reads its passphrases
+before connecting, and the server closes the stream before it signs
+anything - and ends in well under a second. `forward_two_way` takes a
+`phase_timeout`, and the bridge bounds the inner stream as a whole by
+the 120 s it allows one silence, raising `SlowPeerError` past it.
+
+It deliberately does not shed a client that is slow but reasonable. The
+soak's `net_bandwidth_squeeze` throttles a client to 64 KB/s, at which a
+64 MiB upload takes about seventeen minutes, and still stalls everyone
+behind it; only admitting other clients alongside it would change that.
+
+**Test:** `test/test_bridge_slow_client.py` drives a real `OuterBuffer`
+over a fake socket. A client trickling its upload or its reply, and one
+trickling after a fast 2 MB start, is shed once its window is spent; a
+burst stops counting one window after it, even when the next transfer
+waits almost a whole window. Driven through `bridge_inner_stream` over
+real sockets, a client trickling through the inner stream is shed at
+its bound, while an ordinary exchange, and a slow one inside the bound,
+finish. A
+fast client, one reading its reply quickly, a slow client inside its
+window, one idle while its caller waits elsewhere, and a buffer given no
+floor are all kept.
+
 ## Applying Patches
 
 The Docker build process automatically applies these patches:
