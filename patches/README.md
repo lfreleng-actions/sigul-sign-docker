@@ -786,7 +786,8 @@ traceback, every frame on it and their locals. The non-blocking
 handshakes raise `PR_WOULD_BLOCK_ERROR` as ordinary control flow,
 several times per request. Fixing this patch alone left ~1 kB per
 request, and fixing both leaves the bridge flat. The binding is fixed
-at source, not patched here.
+at source in python-nss-ng 1.3.2, which the images pin; it is not
+patched here.
 
 **Test:** `test/test_bridge_memory.py` labels 1000 objects the way the
 bridge labels its buffers: without the patch all 1000 stay alive, with
