@@ -946,7 +946,16 @@ _remove_confirmed() {
 # first, and must be confirmed gone: its labels cannot change, so one
 # left behind would be reused by the next upgrade and name the wrong
 # source in its recovery steps. If it cannot be removed the lock stays.
+#
+# "early" is a refusal before anything was changed. It releases the lock
+# - unless this deploy took over from one that left partial state behind
+# (DIRTY_LOCK), in which case that state is still there and still needs
+# the guard: only the release after a verified deploy may then lift it.
 _release_deploy_lock() {
+    if [[ "${1:-}" == "early" && "${DIRTY_LOCK:-false}" == "true" ]]; then
+        warn "Keeping $(adoption_marker): it guards partial state an earlier deploy left"
+        return 0
+    fi
     if ! _remove_confirmed "$(adoption_source)"; then
         warn "Could not remove $(adoption_source); keeping the lock $(adoption_marker)."
         warn "Remove both by hand, or the next deploy will refuse to run."
@@ -1154,10 +1163,12 @@ _acquire_deploy_lock() {
         fi
         if [[ -n "$from" ]]; then
             warn "Discarding an unfinished upgrade's partial volumes along with the rest"
+            DIRTY_LOCK=true
         elif [[ "$op" == "deploy" ]]; then
             warn "Taking over the lock of a deploy that did not finish (${owner})"
         else
             warn "Finishing a clean that did not finish (${owner})"
+            DIRTY_LOCK=true
         fi
         # Held by the guard, nobody else can take the lock now; the
         # adoption source, if any, still blocks others until this clean
@@ -1263,7 +1274,7 @@ retire_foreign_projects() {
     _remove_client_helper || return 1
     if ! declared=$(${compose_cmd} -f "${COMPOSE_FILE}" --profile '*' config --volumes); then
         error "Could not read the volumes declared in ${COMPOSE_FILE}"
-        _release_deploy_lock
+        _release_deploy_lock early
         return 1
     fi
 
@@ -1271,7 +1282,7 @@ retire_foreign_projects() {
     # containers may already be gone, so only the records still name them.
     if ! records=$(docker volume ls -q --filter "name=sigul_clean_pending_"); then
         error "Could not check for unfinished cleans; nothing has been changed"
-        _release_deploy_lock
+        _release_deploy_lock early
         return 1
     fi
     while IFS= read -r name; do
@@ -1280,7 +1291,7 @@ retire_foreign_projects() {
         if [[ "$FORCE_CLEAN_VOLUMES" != "true" ]]; then
             error "A clean did not finish removing Compose project '${project}'."
             error "Nothing has been changed; finish it with --force-clean-volumes."
-            _release_deploy_lock
+            _release_deploy_lock early
             return 1
         fi
         if [[ ! " ${foreign[*]-} " =~ \ ${project}\  ]]; then
@@ -1294,7 +1305,7 @@ retire_foreign_projects() {
         error "Several Compose projects hold this stack's names: ${foreign[*]}"
         error "Only one can be upgraded; nothing has been changed. Remove the others"
         error "(docker compose -p <name> down), or discard all with --force-clean-volumes."
-        _release_deploy_lock
+        _release_deploy_lock early
         return 1
     fi
     for project in ${foreign[@]+"${foreign[@]}"}; do
@@ -1310,7 +1321,7 @@ retire_foreign_projects() {
             # side.
             if ! before=$(docker volume ls -q); then
                 error "Could not list the existing volumes"
-                _release_deploy_lock
+                _release_deploy_lock early
                 return 1
             fi
             # The old project's state is whatever of this file's volumes
@@ -1347,7 +1358,7 @@ retire_foreign_projects() {
                 error "Compose projects '${project}' and '${own}' both hold state:${clash}"
                 error "Nothing has been changed. Keep one of them: remove the other's volumes"
                 error "(named <project>_<volume>), or discard both with --force-clean-volumes."
-                _release_deploy_lock
+                _release_deploy_lock early
                 return 1
             fi
             # Adopted volumes are only usable with the credentials that
@@ -1360,7 +1371,7 @@ retire_foreign_projects() {
                 error "test-artifacts/nss-password. They are missing from this checkout;"
                 error "nothing has been changed. Run from the checkout that deployed it, or"
                 error "discard its state with --force-clean-volumes."
-                _release_deploy_lock
+                _release_deploy_lock early
                 return 1
             fi
         fi
@@ -1371,7 +1382,7 @@ retire_foreign_projects() {
                 || [[ "$(docker volume inspect -f '{{index .Labels "org.sigul.adoption-from"}}' \
                     "$(adoption_source)" 2>/dev/null)" != "$project" ]]; }; then
             error "Could not record the upgrade before starting it; nothing has been changed"
-            _release_deploy_lock
+            _release_deploy_lock early
             return 1
         fi
         if [[ "$FORCE_CLEAN_VOLUMES" == "true" ]] \
@@ -1659,6 +1670,7 @@ deploy_sigul_services() {
     # set -e does not apply, and deploying over state that failed to be
     # cleaned is the failure a clean deploy exists to prevent.
     HELD_ADOPTION_LOCK=""
+    DIRTY_LOCK=false
     retire_foreign_projects || return 1
     manage_volumes || return 1
 
