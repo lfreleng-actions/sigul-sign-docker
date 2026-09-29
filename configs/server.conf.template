@@ -35,13 +35,13 @@ server-cert-nickname: ${SERVER_FQDN}
 signing-timeout: 60
 
 [database]
-# SQLite database location (FHS-compliant)
-# Production: /var/lib/sigul/server.sqlite
-database-path: /var/lib/sigul/server.sqlite
+# SQLite database location, on the server data volume
+# (/var/lib/sigul/server). Anywhere else is the container's writable
+# layer, lost with every user and key when the container is recreated.
+database-path: /var/lib/sigul/server/server.sqlite
 
 [gnupg]
-# GnuPG configuration directory (FHS-compliant)
-# Production: /var/lib/sigul/gnupg
+# GnuPG home, on the same volume for the same reason
 gnupg-home: /var/lib/sigul/server/gnupg
 
 # Key generation parameters

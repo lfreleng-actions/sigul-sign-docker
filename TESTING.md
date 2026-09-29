@@ -396,7 +396,7 @@ docker exec sigul-server env | \
 - Ensure deployment script writes correct password to
   `test-artifacts/admin-password`
 - Verify the workflow sets `SIGUL_CLIENT_IMAGE` env var
-- Check that docker-compose creates the network
+- Check that docker compose creates the network
 
 ### Auto-Detection Failures
 

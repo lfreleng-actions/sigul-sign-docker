@@ -1,0 +1,239 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 The Linux Foundation
+#
+# Give the server a liveness heartbeat. Its probes checked for an
+# established connection to the bridge, which a frozen server keeps:
+# frozen, it stayed Ready for four minutes and was replaced after about
+# five and a half (#33). The supervising parent now waits for its
+# request child a second at a time and rewrites a heartbeat between
+# slices, withheld while that child is stopped or has held no bridge
+# connection for fifty seconds - the double-TLS teardown wedge the old
+# probe was the backstop for, still replaced within its two minutes. A
+# pidfd ends each slice as soon as the child exits, so the wait adds
+# nothing to a request. See patches/README.md.
+#
+--- a/src/server.py
++++ b/src/server.py
+@@ -25,6 +25,7 @@
+ import hashlib
+ import logging
+ import os
++import select
+ import signal
+ import socket
+ import struct
+@@ -2952,8 +2953,126 @@
+
+ def sigalarm_handler(*args):
+     sys.exit(_CHILD_TIMEOUT)
++
++
++# The server's liveness heartbeat. The supervising parent rewrites it
++# once a second while it runs, and the chart's liveness probe reads its
++# age. Only the parent's own loop beats - no thread: it forks for every
++# request, and a fork with a second thread running could leave the
++# child holding a lock nobody will release.
++#
++# A heartbeat that only proves the parent runs would miss the wedges
++# this server has actually had, so it is withheld while:
++#
++# - the request child has been stopped; a frozen container stops the
++#   parent too, and goes stale regardless;
++# - a request child has held no connection to the bridge for longer
++#   than _DISCONNECTED_SECONDS. That is the double-TLS teardown wedge
++#   patch 06 fixes and the chart's connection check was the backstop
++#   for: the child blocked, the parent waiting on it, nothing connected
++#   and nothing reconnecting. That check restarted such a server within
++#   two minutes, and so must this: the heartbeat then takes another
++#   slice to be withheld, thirty seconds to go stale, and three liveness
++#   failures ten seconds apart, so the bound leaves them their share of
++#   the two minutes. It is still far above any healthy gap: a teardown
++#   takes seconds under patch 06's linger, and a bridge that refuses
++#   the connection sends the parent to its reconnection sleep.
++#
++# A child waiting for a request is connected and asleep, and a long
++# wait for one is normal; a parent sleeping between reconnections while
++# the bridge is down is doing what it should. Neither is withheld.
++_HEARTBEAT_SLICE_SECONDS = 1
++_DISCONNECTED_SECONDS = 50
++_heartbeat_path = None
++_bridge_port = None
++_disconnected_since = None
++
++
++def _connected_to_bridge():
++    '''Whether this host holds an ESTABLISHED TCP connection to the bridge.
++
++    Read from /proc/net/tcp{,6}, the state the chart's probes read. On
++    any failure to read, say connected: an unreadable table is not
++    evidence of a wedge.
++
++    '''
++    if _bridge_port is None:
++        return True
++    want = ':%04X' % _bridge_port
++    read_any = False
++    for table in ('/proc/net/tcp', '/proc/net/tcp6'):
++        try:
++            with open(table) as f:
++                next(f, None)
++                for line in f:
++                    fields = line.split()
++                    # rem_address ends in the port; state 01 is ESTABLISHED.
++                    if len(fields) > 3 and fields[2].endswith(want) \
++                            and fields[3] == '01':
++                        return True
++            read_any = True
++        except (IOError, OSError):
++            continue
++    # A table that was read and holds no such connection is an answer;
++    # only when neither could be read is there none.
++    return not read_any
++
++
++def _child_stopped(pid):
++    '''Whether process pid is stopped (SIGSTOP, or frozen under a tracer).'''
++    try:
++        with open('/proc/%d/stat' % pid) as f:
++            # The state follows the command, which is in parentheses and
++            # may itself contain spaces or parentheses.
++            state = f.read().rsplit(')', 1)[1].split()[0]
++    except (IOError, OSError, IndexError):
++        return False
++    return state in ('T', 't')
++
++
++def _beat(child_pid=None):
++    '''Refresh the heartbeat, unless the request child looks wedged.
++
++    child_pid is the request child being waited for, or None while no
++    child runs - between reconnection attempts, say.
++
++    '''
++    global _disconnected_since
++    if _heartbeat_path is None:
++        return
++    if child_pid is None:
++        _disconnected_since = None
++    else:
++        if _child_stopped(child_pid):
++            return
++        if _connected_to_bridge():
++            _disconnected_since = None
++        else:
++            now = time.monotonic()
++            if _disconnected_since is None:
++                _disconnected_since = now
++            if now - _disconnected_since > _DISCONNECTED_SECONDS:
++                return
++    try:
++        with open(_heartbeat_path, 'w') as f:
++            f.write('{0:.0f}\n'.format(time.time()))
++    except (IOError, OSError) as e:
++        # Better a stale heartbeat, and a restart, than a crashed
++        # supervisor and an unexplained one.
++        logging.warning('Cannot write heartbeat %s: %s', _heartbeat_path, e)
+
+
++def _sleep_beating(seconds):
++    '''time.sleep(seconds), beating the heartbeat throughout.'''
++    deadline = time.monotonic() + seconds
++    while True:
++        _beat()
++        remaining = deadline - time.monotonic()
++        if remaining <= 0:
++            return
++        time.sleep(min(remaining, _HEARTBEAT_SLICE_SECONDS))
++
++
+ def _wait_for_child_reaping_orphans(child_pid):
+     '''Wait for child_pid to exit and return its wait status.
+
+@@ -2966,14 +3085,46 @@
+     life of the daemon, roughly ten per signing request, until the
+     container's pid limit is reached and fork() fails.
+
+-    '''
+-    while True:
+-        (pid, status) = os.waitpid(-1, 0)
+-        if pid == child_pid:
+-            return status
+-        logging.debug('Reaped orphaned process %d (status %d)', pid, status)
++    The wait is taken a second at a time, beating the heartbeat between
++    slices, so that a wedged request child - or a frozen server - can
++    be told from one merely waiting for a request.
+
++    Each slice ends the moment child_pid exits, not when the second is
++    up: the next request child is forked only after this returns, so a
++    fixed sleep would add up to a second to every request. A pidfd
++    becomes readable when its process exits; where one cannot be had,
++    the slice is a plain sleep and the wait merely coarser.
+
++    '''
++    wake = None
++    try:
++        try:
++            wake = select.poll()
++            pidfd = os.pidfd_open(child_pid)
++        except (AttributeError, OSError):
++            # No pidfd_open (Python < 3.9, a kernel < 5.3, a seccomp
++            # filter), or the child is already gone - which the next
++            # waitpid() reports.
++            wake = pidfd = None
++        else:
++            wake.register(pidfd, select.POLLIN)
++        while True:
++            (pid, status) = os.waitpid(-1, os.WNOHANG)
++            if pid == 0:
++                _beat(child_pid)
++                if wake is not None:
++                    wake.poll(_HEARTBEAT_SLICE_SECONDS * 1000)
++                else:
++                    time.sleep(_HEARTBEAT_SLICE_SECONDS)
++                continue
++            if pid == child_pid:
++                return status
++            logging.debug('Reaped orphaned process %d (status %d)', pid,
++                          status)
++    finally:
++        if wake is not None:
++            os.close(pidfd)
++
+ def main():
+     # Any blocking socket operations time out after an hour
+     socket.setdefaulttimeout(60 * 60)
+@@ -2994,7 +3145,17 @@
+
+     signal.signal(signal.SIGTERM, utils.sigterm_handler)
+     utils.create_pid_file(options, 'sigul_server')
++    global _heartbeat_path, _bridge_port
++    _heartbeat_path = os.path.join(options.pid_dir, 'sigul_server.heartbeat')
++    _bridge_port = config.bridge_port
++    # A predecessor's heartbeat, left on a volume that outlived it, must
++    # not pass for this daemon's.
+     try:
++        os.remove(_heartbeat_path)
++    except OSError:
++        pass
++    _beat()
++    try:
+         try:
+             fast_reconnections_done = 0
+             while True:
+@@ -3018,11 +3179,14 @@
+                     fast_reconnections_done = 0
+                 elif (os.WIFEXITED(status)
+                       and os.WEXITSTATUS(status) == _CHILD_CONNECTION_REFUSED):
++                    # Waiting for a bridge that is down is not a wedge:
++                    # keep beating, or one restart would cascade into
++                    # a restart of the other.
+                     if fast_reconnections_done < MAX_FAST_RECONNECTIONS:
+-                        time.sleep(FAST_RECONNECTION_SECONDS)
++                        _sleep_beating(FAST_RECONNECTION_SECONDS)
+                         fast_reconnections_done += 1
+                     else:
+-                        time.sleep(SLOW_RECONNECTION_SECONDS)
++                        _sleep_beating(SLOW_RECONNECTION_SECONDS)
+                         fast_reconnections_done = 0
+                 elif os.WIFEXITED(status) and os.WEXITSTATUS(status) == _CHILD_TIMEOUT:
+                     logging.warning("Child timed out handling request and was killed")

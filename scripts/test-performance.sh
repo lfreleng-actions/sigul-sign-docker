@@ -120,10 +120,10 @@ echo ""
 # Test 4: Database query performance
 echo "=== Test 4: Database Query Performance ==="
 measure_time "Database integrity check" "$ITERATIONS" \
-    "docker exec sigul-server sqlite3 /var/lib/sigul/server.sqlite 'PRAGMA integrity_check;' 2>&1"
+    "docker exec sigul-server sqlite3 /var/lib/sigul/server/server.sqlite 'PRAGMA integrity_check;' 2>&1"
 
 measure_time "User count query" "$ITERATIONS" \
-    "docker exec sigul-server sqlite3 /var/lib/sigul/server.sqlite 'SELECT COUNT(*) FROM users;' 2>&1"
+    "docker exec sigul-server sqlite3 /var/lib/sigul/server/server.sqlite 'SELECT COUNT(*) FROM users;' 2>&1"
 echo ""
 
 # Test 5: File system performance

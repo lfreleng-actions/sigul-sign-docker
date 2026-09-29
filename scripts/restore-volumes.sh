@@ -87,7 +87,7 @@ Examples:
 Warning:
   This operation will OVERWRITE existing volume data!
   Make sure services are stopped before restoring:
-    docker-compose -f docker-compose.sigul.yml down
+    docker compose -f docker-compose.sigul.yml down
 
 EOF
     exit 0
@@ -184,7 +184,7 @@ check_services_stopped() {
         echo "$running_containers" | while IFS= read -r line; do echo "  - $line"; done
         echo ""
         warn "You must stop services before restoring volumes:"
-        warn "  docker-compose -f docker-compose.sigul.yml down"
+        warn "  docker compose -f docker-compose.sigul.yml down"
         echo ""
 
         if [ "$FORCE" = false ]; then
@@ -412,7 +412,7 @@ main() {
     success "=== Restore Complete ==="
     echo ""
     log "Next steps:"
-    log "  1. Start services: docker-compose -f docker-compose.sigul.yml up -d"
+    log "  1. Start services: docker compose -f docker-compose.sigul.yml up -d"
     log "  2. Check service health: docker ps"
     log "  3. Verify logs: docker logs sigul-bridge && docker logs sigul-server"
     echo ""

@@ -253,6 +253,134 @@ initialize_gnupg_directory() {
     fi
 }
 
+# Carry state from where earlier releases kept it onto the data volume.
+#
+# Until the server's database and GnuPG home were configured under
+# $SERVER_DATA_DIR, the volume, they lived in $DATA_DIR on the
+# container's writable layer. That layer survives a container restart,
+# but not a recreation, so this is the only chance to keep a stack's
+# users and signing keys: the first start after the configuration
+# moved. Each is moved only if the volume has nothing of its own there,
+# so state already on the volume always wins.
+# Point server.conf's storage at the data volume, where it still names
+# the old places. Releases before the move wrote database-path as
+# $DATA_DIR/server.sqlite and no gnupg-home, which Sigul defaults to
+# $DATA_DIR/gnupg: both on the writable layer. Under Compose that
+# config lives on a volume and is rewritten only with new certificates,
+# so an upgraded server kept those paths and started on an empty
+# database beside the state preserved for it. Only those two settings
+# change, and only from those values; everything else - the NSS
+# password with it - is left as it is. The chart renders server.conf
+# afresh with the new paths, so there it finds nothing to do.
+#
+# Where it must change and cannot, the server does not start. Its
+# state is on the volume by now - the deploy moved it there, or the
+# move below would - so starting with the old paths would serve an
+# empty database while looking healthy.
+migrate_config_paths() {
+    [ -f "$CONFIG_FILE" ] || return 0
+    local new
+    new=$(awk -v legacy_db="$DATA_DIR/server.sqlite" \
+            -v legacy_gnupg="$DATA_DIR/gnupg" \
+            -v db="$SERVER_DATA_DIR/server.sqlite" -v gnupg="$GNUPG_DIR" '
+        function value(line) {
+            sub(/^[^:=]*[:=][ \t]*/, "", line); sub(/[ \t]+$/, "", line)
+            return line
+        }
+        # Before a section ends, add the key it should have held.
+        function close_section() {
+            if (section == "database" && !seen_db) print "database-path: " db
+            if (section == "gnupg" && !seen_gnupg) print "gnupg-home: " gnupg
+        }
+        /^\[[^]]*\][ \t]*$/ {
+            close_section()
+            section = $0; gsub(/^\[|\][ \t]*$/, "", section)
+            if (section == "database") had_db = 1
+            if (section == "gnupg") had_gnupg = 1
+            print; next
+        }
+        section == "database" && /^database-path[ \t]*[:=]/ {
+            seen_db = 1
+            if (value($0) == legacy_db) { print "database-path: " db; next }
+        }
+        section == "gnupg" && /^gnupg-home[ \t]*[:=]/ {
+            seen_gnupg = 1
+            if (value($0) == legacy_gnupg) { print "gnupg-home: " gnupg; next }
+        }
+        { print }
+        END {
+            close_section()
+            if (!had_db) printf "\n[database]\ndatabase-path: %s\n", db
+            if (!had_gnupg) printf "\n[gnupg]\ngnupg-home: %s\n", gnupg
+        }' "$CONFIG_FILE") || { error "Could not read $CONFIG_FILE to check its storage paths"; return 1; }
+
+    [ "$new" = "$(cat "$CONFIG_FILE")" ] && return 0
+    if ! { printf '%s\n' "$new" > "$CONFIG_FILE.new" \
+            && chown --reference="$CONFIG_FILE" "$CONFIG_FILE.new" \
+            && chmod --reference="$CONFIG_FILE" "$CONFIG_FILE.new" \
+            && mv "$CONFIG_FILE.new" "$CONFIG_FILE"; } 2>/dev/null; then
+        rm -f "$CONFIG_FILE.new" 2>/dev/null || true
+        error "server.conf keeps its database or GnuPG home off the data volume, and cannot be updated: $CONFIG_FILE"
+        error "Set database-path: $SERVER_DATA_DIR/server.sqlite and gnupg-home: $GNUPG_DIR, then restart"
+        return 1
+    fi
+    success "server.conf now keeps the database and GnuPG home on the data volume"
+}
+
+migrate_legacy_state() {
+    migrate_config_paths || return 1
+    local legacy_db="$DATA_DIR/server.sqlite"
+    local legacy_gnupg="$DATA_DIR/gnupg"
+    local db_path
+    # No key, or no file yet, is not an error here: under pipefail a
+    # grep that matches nothing would otherwise end the entrypoint.
+    db_path=$(grep "^database-path:" "$CONFIG_FILE" 2>/dev/null \
+        | cut -d: -f2 | tr -d ' ' || true)
+    db_path="${db_path:-$SERVER_DATA_DIR/server.sqlite}"
+
+    # Each move copies to a sibling on the volume and renames it into
+    # place, which is atomic there, before the original is removed. The
+    # two are on different filesystems, so a plain mv or cp into place
+    # is a copy that an interrupted start leaves half done - and the
+    # next start would take that for the real thing.
+    if [ -s "$legacy_db" ] && [ "$db_path" != "$legacy_db" ]; then
+        if [ -s "$db_path" ]; then
+            warn "Leaving $legacy_db in place: $db_path already holds a database"
+        else
+            log "Moving the server database from $legacy_db to $db_path"
+            local db_stage
+            db_stage="$(dirname "$db_path")/.$(basename "$db_path").migrating"
+            mkdir -p "$(dirname "$db_path")"
+            rm -f "$db_stage"
+            cp -p "$legacy_db" "$db_stage"
+            sync
+            mv -f "$db_stage" "$db_path"
+            rm -f "$legacy_db"
+            success "Server database moved onto the data volume"
+        fi
+    fi
+
+    if [ -d "$legacy_gnupg" ] && [ -n "$(ls -A "$legacy_gnupg" 2>/dev/null)" ] \
+            && [ "$legacy_gnupg" != "$GNUPG_DIR" ]; then
+        if [ -n "$(ls -A "$GNUPG_DIR" 2>/dev/null)" ]; then
+            warn "Leaving $legacy_gnupg in place: $GNUPG_DIR already holds keys"
+        else
+            log "Moving the GnuPG home from $legacy_gnupg to $GNUPG_DIR"
+            local gnupg_stage
+            gnupg_stage="$(dirname "$GNUPG_DIR")/.$(basename "$GNUPG_DIR").migrating"
+            rm -rf "$gnupg_stage"
+            cp -a "$legacy_gnupg" "$gnupg_stage"
+            chmod 700 "$gnupg_stage"
+            sync
+            # Empty, as checked above; rmdir refuses anything else.
+            if [ -d "$GNUPG_DIR" ]; then rmdir "$GNUPG_DIR"; fi
+            mv "$gnupg_stage" "$GNUPG_DIR"
+            rm -rf "$legacy_gnupg"
+            success "GnuPG home moved onto the data volume"
+        fi
+    fi
+}
+
 initialize_directories() {
     log "Initializing runtime directories..."
 
@@ -279,12 +407,12 @@ initialize_database() {
     local db_path
     if ! db_path=$(grep "^database-path:" "$CONFIG_FILE" 2>/dev/null | cut -d: -f2 | tr -d ' '); then
         warn "Cannot extract database-path from configuration, using default"
-        db_path="/var/lib/sigul/server.sqlite"
+        db_path="$SERVER_DATA_DIR/server.sqlite"
     fi
 
     if [ -z "$db_path" ]; then
         warn "Database path not configured, using default"
-        db_path="/var/lib/sigul/server.sqlite"
+        db_path="$SERVER_DATA_DIR/server.sqlite"
     fi
 
     log "Database path: $db_path"
@@ -610,6 +738,7 @@ main() {
     # Initialize required directories
     initialize_gnupg_directory
     initialize_directories
+    migrate_legacy_state
 
     # Fix volume permissions BEFORE initializing the database, because
     # initialize_database invokes sigul_server_add_admin which honours

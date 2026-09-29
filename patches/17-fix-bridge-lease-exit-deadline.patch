@@ -1,0 +1,32 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 The Linux Foundation
+#
+# End a heartbeat lease with the ordinary deadline reset to the idle
+# slice. Patch 15 kept the later of that and the last report, but the
+# last report was made inside the lease, for a wait the phase has
+# finished: a phase ending on a 120 s read left 120 s of heartbeat
+# behind it, so a bridge wedged straight after it was replaced about
+# two minutes late (#38). See patches/README.md.
+#
+--- a/src/bridge.py
++++ b/src/bridge.py
+@@ -287,10 +287,15 @@
+         finally:
+             with self.__lock:
+                 del self.__leases[key]
+-                # Resume ordinary reporting from now, not from whenever
+-                # the last report before the lease was made.
+-                self.__overdue_at = max(self.__overdue_at, time.monotonic() +
+-                                        _IDLE_WAIT_SLICE_SECONDS)
++                # Resume ordinary reporting from now. Not the later of
++                # now and the last report: that report was made inside
++                # the lease, for a wait the block has finished, and
++                # keeping its bound would let a wedge straight after a
++                # phase that ended on a long read go unseen for that
++                # long. Leases are taken on the main loop around whole
++                # phases, so no wait outside this one is still running;
++                # any other lease still counts through its own deadline.
++                self.__overdue_at = time.monotonic() + _IDLE_WAIT_SLICE_SECONDS
+
+     def start(self):
+         self.__publish()

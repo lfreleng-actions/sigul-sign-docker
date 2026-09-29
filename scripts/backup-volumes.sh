@@ -246,8 +246,8 @@ To restore all volumes from this backup:
 
 Important Notes:
 - Restoring volumes will OVERWRITE existing data
-- Stop services before restoring: docker-compose -f docker-compose.sigul.yml down
-- Start services after restoring: docker-compose -f docker-compose.sigul.yml up -d
+- Stop services before restoring: docker compose -f docker-compose.sigul.yml down
+- Start services after restoring: docker compose -f docker-compose.sigul.yml up -d
 
 EOF
 

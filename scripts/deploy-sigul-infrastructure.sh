@@ -946,7 +946,16 @@ _remove_confirmed() {
 # first, and must be confirmed gone: its labels cannot change, so one
 # left behind would be reused by the next upgrade and name the wrong
 # source in its recovery steps. If it cannot be removed the lock stays.
+#
+# "early" is a refusal before anything was changed. It releases the lock
+# - unless this deploy took over from one that left partial state behind
+# (DIRTY_LOCK), in which case that state is still there and still needs
+# the guard: only the release after a verified deploy may then lift it.
 _release_deploy_lock() {
+    if [[ "${1:-}" == "early" && "${DIRTY_LOCK:-false}" == "true" ]]; then
+        warn "Keeping $(adoption_marker): it guards partial state an earlier deploy left"
+        return 0
+    fi
     if ! _remove_confirmed "$(adoption_source)"; then
         warn "Could not remove $(adoption_source); keeping the lock $(adoption_marker)."
         warn "Remove both by hand, or the next deploy will refuse to run."
@@ -958,6 +967,109 @@ _release_deploy_lock() {
         return 1
     fi
     HELD_ADOPTION_LOCK=""
+}
+
+# Carry a server's state off its writable layer before the container
+# is replaced.
+#
+# Releases before the server's database and GnuPG home were configured
+# under /var/lib/sigul/server kept them at /var/lib/sigul/server.sqlite
+# and /var/lib/sigul/gnupg, on the container's writable layer, which is
+# discarded when the container is recreated or removed. Every deploy
+# replaces it, so this is the only moment the data can be saved: while
+# the old container - running or stopped - still exists. Each is copied
+# into the data volume that container mounts, and only if the volume
+# holds none of its own; the entrypoint then finds it where the new
+# configuration expects it, and an upgrade carries the volume across.
+preserve_server_state() {
+    local container=sigul-server volume out
+    # docker container inspect, not docker inspect: the generic form's
+    # "not found" text changed case in Docker 29 ("error: no such
+    # object"), which would read as a failure and stop a first deploy.
+    if ! out=$(docker container inspect "$container" 2>&1 >/dev/null); then
+        case "$out" in
+            *[Nn]"o such container"* | *[Nn]"o such object"*) return 0 ;;
+        esac
+        error "Could not inspect ${container}: ${out}"
+        return 1
+    fi
+    volume=$(docker container inspect -f \
+        '{{range .Mounts}}{{if eq .Destination "/var/lib/sigul/server"}}{{.Name}}{{end}}{{end}}' \
+        "$container") || { error "Could not read the mounts of ${container}"; return 1; }
+    [[ -n "$volume" ]] || return 0
+
+    # Stop it first: a consistent copy of the database needs its writer
+    # gone, and an inventory of a live server could miss state written
+    # before the stop - a first key in a GnuPG home that was empty when
+    # looked at. The caller runs this only once every refusal has
+    # passed, and the container is about to be replaced in any case.
+    if [[ "$(docker container inspect -f '{{.State.Running}}' "$container")" == "true" ]] \
+            && ! docker stop -t 10 "$container" >/dev/null; then
+        error "Could not stop ${container} to preserve its state; nothing has been removed"
+        return 1
+    fi
+
+    # Inventory and copy in one pass, fail closed: each item is copied
+    # out, confirmed absent, or the deploy stops. docker cp says "Could
+    # not find the file" only when it is missing; any other failure must
+    # not be taken for "nothing to keep".
+    #
+    # Streamed straight from the old container into a helper that writes
+    # the volume: the GnuPG home holds private signing keys, which must
+    # never land on the host, where an interrupted deploy would leave
+    # them outside any managed storage. Only error text touches the host.
+    local item err msg pst
+    err=$(mktemp) && msg=$(mktemp) || return 1
+    # Expanded now, as the names are local; the trap clears itself so it
+    # does not outlive this call.
+    # shellcheck disable=SC2064
+    trap "rm -f '$err' '$msg'; trap - RETURN" RETURN
+    for item in server.sqlite gnupg; do
+        # Status taken in the || branch: a failing stage must be judged
+        # here, not end the deploy under set -e before it is reported.
+        pst=(0 0)
+        docker cp "${container}:/var/lib/sigul/${item}" - 2>"$err" \
+            | docker run --rm -i --user 0 --entrypoint sh \
+                -v "${volume}:/var/lib/sigul/server" \
+                "${SIGUL_SERVER_IMAGE}" -c '
+                    stage=$(mktemp -d)
+                    tar -x -C "$stage" 2>/dev/null || exit 4   # no stream
+                    src="$stage/$1" target="/var/lib/sigul/server/$1"
+                    # A directory counts by its entries, never its size:
+                    # -s is true of any directory, and the image seeds an
+                    # empty gnupg into every new volume.
+                    holds() {
+                        if [ -d "$1" ]; then [ -n "$(ls -A "$1")" ]; else [ -s "$1" ]; fi
+                    }
+                    if ! holds "$src"; then
+                        echo "empty; nothing to keep"; exit 0
+                    fi
+                    if holds "$target"; then
+                        echo "already on the volume; keeping that"; exit 0
+                    fi
+                    # Copied beside the target and renamed into place,
+                    # which is atomic on the volume: a copy cut short
+                    # must never be left where the next run would take
+                    # it for the volume holding its own.
+                    next="/var/lib/sigul/server/.$1.preserving"
+                    rm -rf "$next" && cp -a "$src" "$next" \
+                        && chown -R 1000:1000 "$next" && sync \
+                        && rm -rf "$target" && mv "$next" "$target" \
+                        && echo copied' sh "$item" \
+                >"$msg" 2>&1 || pst=("${PIPESTATUS[@]}")
+        if [[ ${pst[0]} -ne 0 ]]; then
+            grep -q "Could not find the file" "$err" && continue
+            error "Could not copy ${item} out of ${container}: $(cat "$err")"
+            error "Nothing has been removed; ${container} is stopped, not deleted."
+            return 1
+        fi
+        if [[ ${pst[1]} -ne 0 ]]; then
+            error "Could not write ${item} into ${volume}: $(cat "$msg")"
+            error "Nothing has been removed; ${container} is stopped, not deleted."
+            return 1
+        fi
+        log "Preserving ${container}'s ${item} in ${volume}: $(cat "$msg")"
+    done
 }
 
 # Take the host-wide deploy lock <marker> for project <own>.
@@ -1051,10 +1163,12 @@ _acquire_deploy_lock() {
         fi
         if [[ -n "$from" ]]; then
             warn "Discarding an unfinished upgrade's partial volumes along with the rest"
+            DIRTY_LOCK=true
         elif [[ "$op" == "deploy" ]]; then
             warn "Taking over the lock of a deploy that did not finish (${owner})"
         else
             warn "Finishing a clean that did not finish (${owner})"
+            DIRTY_LOCK=true
         fi
         # Held by the guard, nobody else can take the lock now; the
         # adoption source, if any, still blocks others until this clean
@@ -1160,7 +1274,7 @@ retire_foreign_projects() {
     _remove_client_helper || return 1
     if ! declared=$(${compose_cmd} -f "${COMPOSE_FILE}" --profile '*' config --volumes); then
         error "Could not read the volumes declared in ${COMPOSE_FILE}"
-        _release_deploy_lock
+        _release_deploy_lock early
         return 1
     fi
 
@@ -1168,7 +1282,7 @@ retire_foreign_projects() {
     # containers may already be gone, so only the records still name them.
     if ! records=$(docker volume ls -q --filter "name=sigul_clean_pending_"); then
         error "Could not check for unfinished cleans; nothing has been changed"
-        _release_deploy_lock
+        _release_deploy_lock early
         return 1
     fi
     while IFS= read -r name; do
@@ -1177,7 +1291,7 @@ retire_foreign_projects() {
         if [[ "$FORCE_CLEAN_VOLUMES" != "true" ]]; then
             error "A clean did not finish removing Compose project '${project}'."
             error "Nothing has been changed; finish it with --force-clean-volumes."
-            _release_deploy_lock
+            _release_deploy_lock early
             return 1
         fi
         if [[ ! " ${foreign[*]-} " =~ \ ${project}\  ]]; then
@@ -1191,7 +1305,7 @@ retire_foreign_projects() {
         error "Several Compose projects hold this stack's names: ${foreign[*]}"
         error "Only one can be upgraded; nothing has been changed. Remove the others"
         error "(docker compose -p <name> down), or discard all with --force-clean-volumes."
-        _release_deploy_lock
+        _release_deploy_lock early
         return 1
     fi
     for project in ${foreign[@]+"${foreign[@]}"}; do
@@ -1207,7 +1321,7 @@ retire_foreign_projects() {
             # side.
             if ! before=$(docker volume ls -q); then
                 error "Could not list the existing volumes"
-                _release_deploy_lock
+                _release_deploy_lock early
                 return 1
             fi
             # The old project's state is whatever of this file's volumes
@@ -1244,7 +1358,7 @@ retire_foreign_projects() {
                 error "Compose projects '${project}' and '${own}' both hold state:${clash}"
                 error "Nothing has been changed. Keep one of them: remove the other's volumes"
                 error "(named <project>_<volume>), or discard both with --force-clean-volumes."
-                _release_deploy_lock
+                _release_deploy_lock early
                 return 1
             fi
             # Adopted volumes are only usable with the credentials that
@@ -1257,7 +1371,7 @@ retire_foreign_projects() {
                 error "test-artifacts/nss-password. They are missing from this checkout;"
                 error "nothing has been changed. Run from the checkout that deployed it, or"
                 error "discard its state with --force-clean-volumes."
-                _release_deploy_lock
+                _release_deploy_lock early
                 return 1
             fi
         fi
@@ -1268,7 +1382,7 @@ retire_foreign_projects() {
                 || [[ "$(docker volume inspect -f '{{index .Labels "org.sigul.adoption-from"}}' \
                     "$(adoption_source)" 2>/dev/null)" != "$project" ]]; }; then
             error "Could not record the upgrade before starting it; nothing has been changed"
-            _release_deploy_lock
+            _release_deploy_lock early
             return 1
         fi
         if [[ "$FORCE_CLEAN_VOLUMES" == "true" ]] \
@@ -1276,6 +1390,11 @@ retire_foreign_projects() {
                     "$(clean_record "$project")" >/dev/null; then
             error "Could not record the clean of '${project}' before starting it"
             return 1
+        fi
+        # Every refusal is behind us; only now may the old server stop.
+        # A clean discards its state anyway.
+        if [[ "$FORCE_CLEAN_VOLUMES" != "true" ]]; then
+            preserve_server_state || return 1
         fi
         warn "Stack from Compose project '${project}' holds this stack's names; removing it"
         # Every profile, so a debug, monitoring or test container of the
@@ -1508,12 +1627,35 @@ manage_volumes() {
         return 1
     fi
 
+    # And by name, as for a foreign project: a volume restored with
+    # docker volume create carries no project label, and a clean that
+    # relied on Compose finding it would reuse its old database and NSS
+    # state if a Compose version found volumes by label alone.
+    local project declared key rc
+    project=$(compose_project_name || true)
+    if [[ -z "$project" ]] \
+            || ! declared=$(${compose_cmd} -f "${COMPOSE_FILE}" --profile '*' config --volumes); then
+        error "Could not read this project's volumes from ${COMPOSE_FILE}; the clean is incomplete"
+        return 1
+    fi
+    while IFS= read -r key; do
+        [[ -n "$key" ]] || continue
+        rc=0
+        _volume_state "${project}_${key}" || rc=$?
+        if [[ $rc -eq 0 ]] && ! _remove_confirmed "${project}_${key}"; then
+            error "Could not remove ${project}_${key}; the clean is incomplete"
+            return 1
+        elif [[ $rc -gt 1 ]]; then
+            error "Could not tell whether ${project}_${key} exists; the clean is incomplete"
+            return 1
+        fi
+    done <<< "$declared"
+
     # The client volumes are created by setup-client.sh with docker
     # volume create, outside Compose, so the project label does not
     # cover them. They hold a certificate issued by the CA just
     # destroyed, which the next CA would not trust.
     local volume
-    local rc
     for volume in sigul-docker_sigul_client_nss sigul-docker_sigul_client_config; do
         rc=0
         _volume_state "$volume" || rc=$?
@@ -1551,6 +1693,7 @@ deploy_sigul_services() {
     # set -e does not apply, and deploying over state that failed to be
     # cleaned is the failure a clean deploy exists to prevent.
     HELD_ADOPTION_LOCK=""
+    DIRTY_LOCK=false
     retire_foreign_projects || return 1
     manage_volumes || return 1
 
@@ -1650,6 +1793,13 @@ deploy_sigul_services() {
 
     # Start cert-init container first to pre-generate all certificates
     log "Starting certificate initialization (cert-init)..."
+    # The server container is about to be recreated. Every refusal has
+    # already been checked, so its writable-layer state can be saved now
+    # without a rejected deploy ever stopping a working server. A clean
+    # discards that state anyway.
+    if [[ "$FORCE_CLEAN_VOLUMES" != "true" ]]; then
+        preserve_server_state || return 1
+    fi
     if ${compose_cmd} -f "${COMPOSE_FILE}" up cert-init; then
         success "Certificate initialization completed"
 

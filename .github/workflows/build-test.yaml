@@ -1211,6 +1211,52 @@ jobs:
             "${SIGUL_BRIDGE_IMAGE}" \
             /test/test_bridge_memory.py
 
+      - name: 'Test the bridge client throughput floor'
+        shell: bash
+        env:
+          SIGUL_BRIDGE_IMAGE: >-
+            bridge-${{
+              steps.runner-arch.outputs.platform-id
+            }}-image:test
+        run: |
+          # Regression guard for patches/18. The bridge serves one
+          # request at a time, and a client trickling its data held the
+          # only slot for as long as it liked. Checks that a trickling
+          # client is shed once its grace is spent, and that a fast
+          # client, a slow one inside its grace, and one idle while the
+          # server works are all kept.
+          docker run --rm \
+            --user 1000:1000 \
+            -v "${PWD}/test:/test:ro" \
+            --entrypoint python3 \
+            "${SIGUL_BRIDGE_IMAGE}" \
+            /test/test_bridge_slow_client.py
+
+      - name: 'Test server liveness heartbeat'
+        shell: bash
+        env:
+          SIGUL_SERVER_IMAGE: >-
+            server-${{
+              steps.runner-arch.outputs.platform-id
+            }}-image:test
+        run: |
+          # Regression guard for patches/19. The chart's server liveness
+          # probe reads a heartbeat the supervising parent keeps fresh
+          # only while its request child is neither stopped nor without
+          # a bridge connection past its bound. Checks both, and that a
+          # waiting child, a connected one and a parent sleeping between
+          # reconnections all keep it fresh - so a healthy idle server
+          # or a bridge restart is never mistaken for a wedge. The chart
+          # is mounted so the check can hold its liveness probe to the
+          # replacement bound the connection probe it replaced had.
+          docker run --rm \
+            --user 1000:1000 \
+            -v "${PWD}/test:/test:ro" \
+            -v "${PWD}/K8S/charts/sigul/templates:/chart:ro" \
+            --entrypoint python3 \
+            "${SIGUL_SERVER_IMAGE}" \
+            /test/test_server_heartbeat.py
+
       - name: 'Test a clean redeploy over the running stack'
         shell: bash
         env:

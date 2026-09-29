@@ -121,7 +121,7 @@ Consequences for Kubernetes:
 | Data | Path | Criticality |
 | --- | --- | --- |
 | Server GnuPG home (GPG private keys) | `/var/lib/sigul/server/gnupg` | **Critical — encrypt + back up** |
-| Server SQLite DB (users, key metadata, wrapped passphrases) | `/var/lib/sigul/server.sqlite` | **Critical — see defect §3.1** |
+| Server SQLite DB (users, key metadata, wrapped passphrases) | `/var/lib/sigul/server/server.sqlite` | **Critical — see defect §2.5.1** |
 | Bridge NSS DB (contains CA private key) | `/etc/pki/sigul/bridge` | Critical (root of trust) |
 | Server NSS DB | `/etc/pki/sigul/server` | Reproducible from CA + P12, but persist anyway |
 | Generated configs | `/etc/sigul` | Becomes ConfigMap + Secret in K8s |
@@ -134,7 +134,12 @@ Consequences for Kubernetes:
    mounts at `/var/lib/sigul/server`. The DB lands one level above the
    mount, on the container's writable layer, and is lost on container
    recreation. Invisible in CI (fresh DB every run); fatal in
-   production. Fix the path or the mount.
+   production. Fix the path or the mount. *Fixed:* the chart places
+   both under its volume, and so does the Compose stack since #37. On
+   an upgrade the deploy copies an existing writable-layer database and
+   GnuPG home into the volume before replacing the container, and the
+   server's entrypoint points a `server.conf` that still names the old
+   paths at the volume.
 2. **NSS password in world-readable config.** `cert-init.sh` writes
    `nss-password:` in plaintext into 644-mode config files on a volume
    shared between containers, and the deploy script prints both
@@ -353,7 +358,7 @@ The current images are CI/debug-oriented. For production:
 - Publish multi-arch (amd64/arm64) images to GHCR with digests pinned
   in the Helm values; the release workflow already builds both arches
   natively.
-- Pin `python-nss-ng` (already `1.2.2` in Dockerfiles) and normalize
+- Pin `python-nss-ng` (already `1.3.2` in Dockerfiles) and normalize
   the install script's fallback repo URL.
 
 ---

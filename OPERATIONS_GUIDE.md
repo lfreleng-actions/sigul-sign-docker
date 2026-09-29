@@ -30,7 +30,7 @@ Check the health of all services:
 
 ```bash
 # Quick status check
-docker-compose -f docker-compose.sigul.yml ps
+docker compose -f docker-compose.sigul.yml ps
 
 # Detailed status with health
 docker ps --filter "name=sigul" --format "table {{.Names}}\t{{.Status}}\t{{.Health}}"
@@ -50,10 +50,10 @@ Review recent logs for errors or warnings:
 
 ```bash
 # View recent logs (last 50 lines)
-docker-compose -f docker-compose.sigul.yml logs --tail=50
+docker compose -f docker-compose.sigul.yml logs --tail=50
 
 # Follow logs in real-time
-docker-compose -f docker-compose.sigul.yml logs -f
+docker compose -f docker-compose.sigul.yml logs -f
 
 # Bridge logs only
 docker logs sigul-bridge --tail=50
@@ -62,7 +62,7 @@ docker logs sigul-bridge --tail=50
 docker logs sigul-server --tail=50
 
 # Search for errors
-docker-compose -f docker-compose.sigul.yml logs | grep -i error
+docker compose -f docker-compose.sigul.yml logs | grep -i error
 ```
 
 ### Resource Usage Check
@@ -123,13 +123,13 @@ Check database integrity:
 
 ```bash
 # Database integrity check
-docker exec sigul-server sqlite3 /var/lib/sigul/server.sqlite "PRAGMA integrity_check;"
+docker exec sigul-server sqlite3 /var/lib/sigul/server/server.sqlite "PRAGMA integrity_check;"
 
 # Database size
-docker exec sigul-server du -sh /var/lib/sigul/server.sqlite
+docker exec sigul-server du -sh /var/lib/sigul/server/server.sqlite
 
 # Table count
-docker exec sigul-server sqlite3 /var/lib/sigul/server.sqlite ".tables"
+docker exec sigul-server sqlite3 /var/lib/sigul/server/server.sqlite ".tables"
 ```
 
 ### Certificate Status
@@ -190,7 +190,7 @@ docker exec sigul-bridge test -f /etc/sigul/bridge.conf && echo "OK" || echo "MI
 docker exec sigul-server test -f /etc/sigul/server.conf && echo "OK" || echo "MISSING"
 
 # Database
-docker exec sigul-server test -f /var/lib/sigul/server.sqlite && echo "OK" || echo "MISSING"
+docker exec sigul-server test -f /var/lib/sigul/server/server.sqlite && echo "OK" || echo "MISSING"
 
 # GnuPG home
 docker exec sigul-server test -d /var/lib/sigul/server/gnupg && echo "OK" || echo "MISSING"
@@ -217,31 +217,31 @@ docker exec sigul-server ls -la /var/lib/sigul/server/gnupg
 
 ```bash
 # List users
-docker exec sigul-server sqlite3 /var/lib/sigul/server.sqlite "SELECT * FROM users;"
+docker exec sigul-server sqlite3 /var/lib/sigul/server/server.sqlite "SELECT * FROM users;"
 
 # Count users
-docker exec sigul-server sqlite3 /var/lib/sigul/server.sqlite "SELECT COUNT(*) FROM users;"
+docker exec sigul-server sqlite3 /var/lib/sigul/server/server.sqlite "SELECT COUNT(*) FROM users;"
 
 # Database schema
-docker exec sigul-server sqlite3 /var/lib/sigul/server.sqlite ".schema"
+docker exec sigul-server sqlite3 /var/lib/sigul/server/server.sqlite ".schema"
 
 # Database statistics
-docker exec sigul-server sqlite3 /var/lib/sigul/server.sqlite "SELECT name, COUNT(*) FROM sqlite_master GROUP BY type;"
+docker exec sigul-server sqlite3 /var/lib/sigul/server/server.sqlite "SELECT name, COUNT(*) FROM sqlite_master GROUP BY type;"
 ```
 
 ### Restart Services
 
 ```bash
 # Restart specific service
-docker-compose -f docker-compose.sigul.yml restart sigul-bridge
-docker-compose -f docker-compose.sigul.yml restart sigul-server
+docker compose -f docker-compose.sigul.yml restart sigul-bridge
+docker compose -f docker-compose.sigul.yml restart sigul-server
 
 # Restart all services
-docker-compose -f docker-compose.sigul.yml restart
+docker compose -f docker-compose.sigul.yml restart
 
 # Graceful restart (stop then start)
-docker-compose -f docker-compose.sigul.yml stop
-docker-compose -f docker-compose.sigul.yml start
+docker compose -f docker-compose.sigul.yml stop
+docker compose -f docker-compose.sigul.yml start
 ```
 
 ### View Configuration
@@ -264,7 +264,7 @@ cat docker-compose.sigul.yml
 ./scripts/backup-volumes.sh
 
 # 2. Stop services
-docker-compose -f docker-compose.sigul.yml down
+docker compose -f docker-compose.sigul.yml down
 
 # 3. Remove certificate volumes
 docker volume rm sigul_bridge_nss sigul_server_nss
@@ -311,7 +311,7 @@ tar -tzf backups/sigul_server_data-*.tar.gz > /dev/null && echo "OK" || echo "CO
 
 ```bash
 # 1. Stop services
-docker-compose -f docker-compose.sigul.yml down
+docker compose -f docker-compose.sigul.yml down
 
 # 2. List available backups
 ls -lh backups/
@@ -320,7 +320,7 @@ ls -lh backups/
 ./scripts/restore-volumes.sh sigul_server_data backups/sigul_server_data-TIMESTAMP.tar.gz
 
 # 4. Restart services
-docker-compose -f docker-compose.sigul.yml up -d
+docker compose -f docker-compose.sigul.yml up -d
 
 # 5. Verify
 ./scripts/test-infrastructure.sh
@@ -378,7 +378,7 @@ docker system prune -a --volumes
 
 ```bash
 # Check exit status
-docker-compose -f docker-compose.sigul.yml ps
+docker compose -f docker-compose.sigul.yml ps
 
 # View crash logs
 docker logs sigul-bridge --tail 100
@@ -393,11 +393,11 @@ free -h
 
 ```bash
 # Restart crashed service
-docker-compose -f docker-compose.sigul.yml restart sigul-bridge
-docker-compose -f docker-compose.sigul.yml restart sigul-server
+docker compose -f docker-compose.sigul.yml restart sigul-bridge
+docker compose -f docker-compose.sigul.yml restart sigul-server
 
 # If restart fails, rebuild
-docker-compose -f docker-compose.sigul.yml up -d --force-recreate sigul-server
+docker compose -f docker-compose.sigul.yml up -d --force-recreate sigul-server
 ```
 
 ### Database Corruption
@@ -406,23 +406,23 @@ docker-compose -f docker-compose.sigul.yml up -d --force-recreate sigul-server
 
 ```bash
 # Check database integrity
-docker exec sigul-server sqlite3 /var/lib/sigul/server.sqlite "PRAGMA integrity_check;"
+docker exec sigul-server sqlite3 /var/lib/sigul/server/server.sqlite "PRAGMA integrity_check;"
 ```
 
 **Recovery:**
 
 ```bash
 # 1. Stop services
-docker-compose -f docker-compose.sigul.yml down
+docker compose -f docker-compose.sigul.yml down
 
 # 2. Restore from latest backup
 ./scripts/restore-volumes.sh sigul_server_data backups/sigul_server_data-LATEST.tar.gz
 
 # 3. Restart
-docker-compose -f docker-compose.sigul.yml up -d
+docker compose -f docker-compose.sigul.yml up -d
 
 # 4. Verify
-docker exec sigul-server sqlite3 /var/lib/sigul/server.sqlite "PRAGMA integrity_check;"
+docker exec sigul-server sqlite3 /var/lib/sigul/server/server.sqlite "PRAGMA integrity_check;"
 ```
 
 ### Certificate Expiry
@@ -466,8 +466,8 @@ docker exec sigul-bridge getent hosts sigul-server.example.org
 
 ```bash
 # Restart Docker network
-docker-compose -f docker-compose.sigul.yml down
-docker-compose -f docker-compose.sigul.yml up -d
+docker compose -f docker-compose.sigul.yml down
+docker compose -f docker-compose.sigul.yml up -d
 
 # Verify network
 ./scripts/verify-network.sh
@@ -496,7 +496,7 @@ docker inspect sigul-server --format='{{.LogPath}}' | xargs ls -lh
 docker system prune -a --volumes
 
 # Rotate logs
-docker-compose -f docker-compose.sigul.yml logs --tail=0 > /dev/null
+docker compose -f docker-compose.sigul.yml logs --tail=0 > /dev/null
 
 # Remove old backups
 find backups/ -name "*.tar.gz" -mtime +30 -delete
@@ -568,7 +568,7 @@ docker exec sigul-bridge certutil -V -n "sigul-bridge.example.org" -u V -d sql:/
 docker exec sigul-server pgrep -a python
 
 # Restart server
-docker-compose -f docker-compose.sigul.yml restart sigul-server
+docker compose -f docker-compose.sigul.yml restart sigul-server
 ```
 
 ---
@@ -596,7 +596,7 @@ Monitor key performance indicators:
 time docker exec sigul-server nc -zv sigul-bridge.example.org 44333
 
 # Database query time
-time docker exec sigul-server sqlite3 /var/lib/sigul/server.sqlite "SELECT COUNT(*) FROM users;"
+time docker exec sigul-server sqlite3 /var/lib/sigul/server/server.sqlite "SELECT COUNT(*) FROM users;"
 
 # Certificate validation time
 time docker exec sigul-bridge certutil -V -n "sigul-bridge.example.org" -u V -d sql:/etc/pki/sigul
@@ -621,8 +621,8 @@ docker stats sigul-bridge sigul-server --format "table {{.Name}}\t{{.NetIO}}"
 
 ### Daily Checklist
 
-- [ ] Check service status: `docker-compose -f docker-compose.sigul.yml ps`
-- [ ] Review logs for errors: `docker-compose -f docker-compose.sigul.yml logs --tail=50`
+- [ ] Check service status: `docker compose -f docker-compose.sigul.yml ps`
+- [ ] Review logs for errors: `docker compose -f docker-compose.sigul.yml logs --tail=50`
 - [ ] Monitor resource usage: `docker stats --no-stream`
 - [ ] Check disk space: `df -h /var/lib/docker`
 

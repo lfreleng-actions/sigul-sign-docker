@@ -15,7 +15,7 @@
 # 5. Timestamp-based serials
 #
 # Usage:
-#   docker-compose run --rm sigul-bridge /workspace/tests/test-serial-formats.sh
+#   docker compose run --rm sigul-bridge /workspace/tests/test-serial-formats.sh
 
 set -euo pipefail
 

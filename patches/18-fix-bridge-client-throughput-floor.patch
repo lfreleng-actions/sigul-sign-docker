@@ -1,0 +1,304 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 The Linux Foundation
+#
+# Give the bridge a floor on each client's throughput. The bridge
+# serves one request at a time, and patch 11's idle deadline sheds a
+# client that goes silent but not one that trickles: a client moving a
+# few bytes a second held signing for everyone for as long as its
+# payload took (#31). The client's buffer now measures its throughput
+# over time spent waiting on the client alone, never on the server, and
+# sheds a client below 4 KiB/s over its most recent 60 s of it. The
+# inner stream, relayed on the raw sockets past that floor, is bounded
+# as a whole instead. See patches/README.md.
+#
+--- a/src/double_tls.py
++++ b/src/double_tls.py
+@@ -16,6 +16,7 @@
+ # Red Hat Author: Miloslav Trmac <mitr@redhat.com>
+ # Red Hat Author: Patrick Uiterwijk <puiterwijk@redhat.com>
+
++import collections
+ import logging
+ import os
+ import signal
+@@ -72,6 +73,10 @@
+
+ class IdleTimeoutError(IOError):
+     '''Nothing moved on a connection for longer than its idle deadline.'''
++
++
++class SlowPeerError(IdleTimeoutError):
++    '''A peer moved data too slowly, for too long, to keep the connection.'''
+
+
+
+@@ -253,7 +258,7 @@
+
+     @staticmethod
+     def forward_two_way(buf_1, buf_2, shutdown_linger=None,
+-                        idle_timeout=None):
++                        idle_timeout=None, phase_timeout=None):
+         '''Forward data in parallel using buf_1 and buf_2.
+
+         Stop when neither is active.
+@@ -265,6 +270,12 @@
+         otherwise indistinguishable from a slow one, and holds the
+         bridge's single slot for as long as it likes.
+
++        If phase_timeout is not None, raise SlowPeerError once that many
++        seconds pass before both buffers are done, however much moves in
++        the meantime. The idle deadline resets on any byte, so without
++        this a peer trickling through a phase that needs a fraction of a
++        second holds the connection for as long as it keeps trickling.
++
+         If shutdown_linger is not None, also stop that many seconds after
+         buf_1 goes inactive, whether or not buf_2 has. Only pass it where
+         buf_1 inactive means the local side has closed and nothing more
+@@ -280,6 +291,9 @@
+         idle_deadline = None
+         if idle_timeout is not None:
+             idle_deadline = time.monotonic() + idle_timeout
++        phase_deadline = None
++        if phase_timeout is not None:
++            phase_deadline = time.monotonic() + phase_timeout
+         while buf_1._active or buf_2._active:
+             poll_descs = {}
+             buf_1._prepare_poll(poll_descs)
+@@ -307,6 +321,17 @@
+                 if (timeout == nss.io.PR_INTERVAL_NO_TIMEOUT
+                         or idle_interval < timeout):
+                     timeout = idle_interval
++            if phase_deadline is not None:
++                remaining = phase_deadline - time.monotonic()
++                if remaining <= 0:
++                    raise SlowPeerError(
++                        'Not finished within %d s, though not idle'
++                        % phase_timeout)
++                phase_interval = nss.io.seconds_to_interval(
++                    max(1, int(remaining + 0.999)))
++                if (timeout == nss.io.PR_INTERVAL_NO_TIMEOUT
++                        or phase_interval < timeout):
++                    timeout = phase_interval
+
+             _debug('Poll: %s',
+                    ', '.join(['{0!s}:{1!s}'.format(_id(o), v)
+@@ -1036,15 +1061,47 @@
+
+     '''A buffer allowing access to the outer stream of a _DoubleTLS socket.'''
+
+-    def __init__(self, socket, idle_timeout=None):
++    def __init__(self, socket, idle_timeout=None, min_rate=None,
++                 rate_grace=None):
+         '''Wrap socket.
+
+         idle_timeout, in seconds, bounds every individual receive and
+         send; on expiry NSPR raises NSPRError with PR_IO_TIMEOUT_ERROR.
+         None means block indefinitely, as before.
+
++        min_rate, in bytes per second, is a floor on the peer's
++        throughput, measured over the time spent waiting on the peer:
++        inside this buffer's own receives and sends, never while the
++        caller is busy elsewhere - waiting on another peer, or working.
++        It is judged over the most recent rate_grace seconds of that
++        waiting, once there have been that many: a peer that completed
++        fewer than min_rate * rate_grace bytes within them raises
++        SlowPeerError. A rolling window, not a running average, so that
++        a fast start cannot buy a slow finish - a 64 MiB burst would
++        otherwise cover hours of trickle - and bytes leave it a window
++        after they arrived, however long the waits around them. The
++        idle deadline bounds a silent peer; this bounds one that
++        trickles, which the idle deadline never sheds. None means no
++        floor, as before.
++
+         '''
+         self.__socket = socket
++        self.__min_rate = min_rate
++        if min_rate is not None and not (rate_grace and rate_grace > 0):
++            # A floor with no window would never be enforced.
++            raise ValueError('min_rate needs a positive rate_grace')
++        self.__rate_window = rate_grace or 0
++        # Bytes moved, by when each transfer completed on the clock of
++        # time spent waiting on the peer: [slice number, bytes] for
++        # slices a sixtieth of the window long, oldest first, trimmed to
++        # those overlapping the most recent window. Keyed by where a
++        # transfer ends, not merged into whichever entry is open, so a
++        # long wait never carries older bytes along with it; and at most
++        # sixty-one entries however finely the peer chops its data.
++        self.__bucket_seconds = self.__rate_window / 60.0
++        self.__transfers = collections.deque()
++        self.__waited = 0.0
++        self.__moved = 0
+         self.__inner_packets = b''
+         self.__outer_data = b''
+         if idle_timeout is None:
+@@ -1058,6 +1115,61 @@
+         '''The socket used by this buffer.'''
+         return self.__socket
+
++    def __timed(self, operation, size_of):
++        '''Run operation(), charging its duration to the peer.
++
++        size_of(result) is the number of bytes it moved. The floor is
++        checked only once those are counted, so a transfer that just
++        completed is never judged by its wait alone.
++
++        '''
++        if self.__min_rate is None:
++            # No floor: nothing to measure, and nothing kept - the
++            # server's buffer lives as long as its connection.
++            return operation()
++        started = time.monotonic()
++        try:
++            result = operation()
++        except BaseException:
++            # Failed, so nothing moved; its wait still counts, but the
++            # error is what the caller needs to see.
++            self.__charge(time.monotonic() - started, 0)
++            raise
++        self.__charge(time.monotonic() - started, size_of(result))
++        self.__check_rate()
++        return result
++
++    def __charge(self, waited, moved):
++        '''Record one transfer, which ended after waiting `waited`.'''
++        self.__waited += waited
++        if moved:
++            slot = int(self.__waited // self.__bucket_seconds)
++            if self.__transfers and self.__transfers[-1][0] == slot:
++                self.__transfers[-1][1] += moved
++            else:
++                self.__transfers.append([slot, moved])
++            self.__moved += moved
++        # Keep only slices that overlap the most recent window.
++        oldest = int((self.__waited - self.__rate_window)
++                     // self.__bucket_seconds)
++        while self.__transfers and self.__transfers[0][0] < oldest:
++            self.__moved -= self.__transfers.popleft()[1]
++
++    def __check_rate(self):
++        '''Raise SlowPeerError if the peer is below its throughput floor.'''
++        if self.__min_rate is None or self.__waited <= self.__rate_window:
++            return
++        # The bytes completed within the last window of waiting, over
++        # that window. A slice straddling its start counts whole, which
++        # errs by at most a sixtieth of a window in the peer's favour.
++        rate = self.__moved / self.__rate_window
++        if rate < self.__min_rate:
++            raise SlowPeerError(
++                'Peer moved %d bytes in the last %g s of waiting on it '
++                '(%.0f B/s, floor %d B/s)' % (self.__moved,
++                                              self.__rate_window, rate,
++                                              self.__min_rate))
++
+     def __recv_exact(self, buf_size):
+         '''Return exactly buf_size bytes of data from self.socket.
+
+@@ -1067,7 +1179,9 @@
+         res = b''
+         while len(res) < buf_size:
+             _progress(self.__bound)
+-            run = self.__socket.recv(buf_size - len(res), self.__interval)
++            wanted = buf_size - len(res)
++            run = self.__timed(
++                lambda: self.__socket.recv(wanted, self.__interval), len)
+             if len(run) == 0:
+                 raise EOFError('Unexpected EOF on _DoubleTLS')
+             res += run
+@@ -1115,9 +1229,13 @@
+             raise Exception('Data size larger than limit')
+         _debug('o%s: sending %d bytes', _id(self), len(data))
+         _progress(2 * self.__bound if self.__bound is not None else None)
+-        self.__socket.send(utils.u32_pack(len(data)), self.__interval)
+-        self.__socket.send(data, self.__interval)
++        header = utils.u32_pack(len(data))
+
++        def send():
++            self.__socket.send(header, self.__interval)
++            self.__socket.send(data, self.__interval)
++        self.__timed(send, lambda _: len(header) + len(data))
++
+     def set_full_duplex(self, value):
+         '''Set full duplex status of the socket to value.'''
+         self.__socket.set_ssl_option(nss.ssl.SSL_ENABLE_FDX, value)
+@@ -1281,11 +1399,15 @@
+                 self.__dst_shut_down = True
+
+
+-def bridge_inner_stream(client_buf, server_buf, idle_timeout=None):
++def bridge_inner_stream(client_buf, server_buf, idle_timeout=None,
++                        phase_timeout=None):
+     '''Transfer data between until the inner stream ends.
+
+     Raise IdleTimeoutError if idle_timeout seconds pass with nothing
+-    moving in either direction.
++    moving in either direction, and SlowPeerError if the inner stream
++    has not ended phase_timeout seconds after it began. The inner
++    stream carries raw sockets, so the outer buffers' throughput floors
++    do not apply to it; the phase bound stands in for them.
+
+     '''
+     # FIXME: recover from I/O errors?
+@@ -1301,7 +1423,8 @@
+     buf_2 = _InnerBridgingBuffer(server_fd, client_fd,
+                                  server_buf.pending_inner_packets())
+     _InnerBridgingBuffer.forward_two_way(buf_1, buf_2,
+-                                         idle_timeout=idle_timeout)
++                                         idle_timeout=idle_timeout,
++                                         phase_timeout=phase_timeout)
+     client_fd.set_socket_option(nss.io.PR_SockOpt_Nonblocking, False)
+     server_fd.set_socket_option(nss.io.PR_SockOpt_Nonblocking, False)
+
+--- a/src/bridge.py
++++ b/src/bridge.py
+@@ -199,6 +199,28 @@
+ # signing operations stream data or finish in seconds.
+ _REQUEST_IDLE_SECONDS = 120
+
++# The idle deadline sheds a client that stops; these shed one that
++# trickles. The bridge serves one request at a time, so a client moving
++# a few bytes a second holds signing for everyone for as long as its
++# payload takes - hours for a large one, forever at a byte a minute.
++# Measured only over time spent waiting on the client itself: never
++# while the bridge waits on the server, which is where signing, GPG and
++# Koji time goes, so no slow server-side operation can trip it. The
++# floor is a sixteenth of the slowest link the soak throttles clients
++# to, and far below any real CI network; the grace lets a small request,
++# or a slow start, through untouched.
++_CLIENT_MIN_BYTES_PER_SECOND = 4 * 1024
++_CLIENT_RATE_GRACE_SECONDS = 60
++
++# The inner stream bypasses the outer buffers, and with them the floor:
++# it is relayed on the raw sockets. It carries only the inner TLS
++# handshake and a few small fields - the client reads its passphrases
++# before connecting, and the server closes the stream before it signs
++# anything - so it ends in well under a second. Bounded as a whole, by
++# as long as one silence may last, so that a client trickling through
++# it cannot hold the only slot either.
++_INNER_PHASE_SECONDS = _REQUEST_IDLE_SECONDS
++
+ # How often the bridge's liveness heartbeat is published, and the
+ # longest any wait that would otherwise block indefinitely may last
+ # before the main loop comes round again. The liveness probe reads the
+@@ -1511,8 +1533,10 @@
+                 'User {0!s} not allowed to connect'.format(
+                     repr(user_name)))
+
+-        client_buf = double_tls.OuterBuffer(client_sock,
+-                                            idle_timeout=_REQUEST_IDLE_SECONDS)
++        client_buf = double_tls.OuterBuffer(
++            client_sock, idle_timeout=_REQUEST_IDLE_SECONDS,
++            min_rate=_CLIENT_MIN_BYTES_PER_SECOND,
++            rate_grace=_CLIENT_RATE_GRACE_SECONDS)
+         server_buf = double_tls.OuterBuffer(server_sock,
+                                             idle_timeout=_REQUEST_IDLE_SECONDS)
+
+@@ -1523,7 +1547,8 @@
+                 conn.__handler.forward_request_payload(conn)
+
+             double_tls.bridge_inner_stream(conn.client_buf, conn.server_buf,
+-                                           idle_timeout=_REQUEST_IDLE_SECONDS)
++                                           idle_timeout=_REQUEST_IDLE_SECONDS,
++                                           phase_timeout=_INNER_PHASE_SECONDS)
+
+             conn.__forward_reply_headers()
+             conn.__forward_reply_payload()

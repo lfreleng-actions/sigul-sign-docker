@@ -30,6 +30,11 @@ SERVER = os.environ.get("SOAK_SERVER_CONTAINER", "sigul-server")
 #: reap fallback, and slack for a loaded runner.
 TEARDOWN_BOUND_SECONDS = 25.0
 
+#: How long to keep looking for the server's request child: between two
+#: requests there is a moment with none, and under load a single look
+#: can land there.
+CHILD_DISCOVERY_SECONDS = 10.0
+
 
 class _ProcessFault(Fault):
     unit: str = ""
@@ -149,11 +154,12 @@ class ServerTeardownAgainstSilentPeer(_ProcessFault):
         super().__init__(target)
         self._child = ""
 
-    def start(self) -> None:
-        self._child = ""
+    def _find_child(self) -> tuple[str, str]:
         parent = self._target.run_in(
             SERVER, ["pgrep", "-o", "-f", r"serve[r]\.py"], timeout=15, check=False
         ).strip()
+        if not parent:
+            return "", ""
         # The request child is the parent's live python child. Where
         # the server is PID 1 its children also include every orphaned
         # gpg zombie, so filter on command and state rather than taking
@@ -173,8 +179,20 @@ class ServerTeardownAgainstSilentPeer(_ProcessFault):
             ),
             "",
         )
+        return parent, child
+
+    def start(self) -> None:
+        self._child = ""
+        deadline = time.monotonic() + CHILD_DISCOVERY_SECONDS
+        parent, child = self._find_child()
+        while not (parent and child) and time.monotonic() < deadline:
+            time.sleep(0.25)
+            parent, child = self._find_child()
         if not parent or not child:
-            raise RuntimeError(f"no idle server child found (parent={parent!r})")
+            raise RuntimeError(
+                f"no idle server child found in {CHILD_DISCOVERY_SECONDS}s "
+                f"(parent={parent!r})"
+            )
         self._child = child
         self._target.freeze(self.unit)
         self._target.run_in(SERVER, ["kill", "-ALRM", child], timeout=15)

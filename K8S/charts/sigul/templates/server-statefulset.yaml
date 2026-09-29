@@ -268,43 +268,42 @@ spec:
                 # line, and the \.py suffix excludes the first-boot
                 # helpers (server_create_db.py, server_add_admin.py)
                 # whose names contain the daemon prefix.
-                - "pgrep -f '/usr/share/sigul/serve[r]\\.py' >/dev/null"
+                #
+                # And its heartbeat exists: the daemon writes it as soon
+                # as it starts supervising, so its absence means the
+                # daemon never got that far.
+                - "pgrep -f '/usr/share/sigul/serve[r]\\.py' >/dev/null && test -e /run/sigul_server.heartbeat"
             periodSeconds: 5
             failureThreshold: 60
-          # Liveness deliberately asks the same question as readiness,
-          # not merely "does a process exist".
+          # Liveness reads the daemon's heartbeat (patch 19), not a
+          # process or a socket: a frozen server keeps both, and stayed
+          # Ready for four minutes and was replaced only after about five
+          # and a half (#33). The supervising parent rewrites it once a
+          # second, and withholds it while its request child is stopped,
+          # or has held no connection to the bridge for fifty seconds.
           #
-          # A process-existence check cannot see this service fail. When
-          # a double-TLS teardown wedges, the daemon and its children
-          # are all still present - they are blocked in waitpid() and
-          # poll() - so pgrep succeeds while nothing reconnects to the
-          # bridge and every request returns "Unexpected EOF in NSPR".
-          # Observed in production: readiness failed 1387 times over
-          # 5h19m, liveness passed throughout, restartCount stayed 0,
-          # and the service answered nothing for six hours.
+          # That second condition is the backstop this probe used to be,
+          # by checking for an established connection directly. When a
+          # double-TLS teardown wedged, every process was still present -
+          # blocked in waitpid() and poll() - while nothing reconnected;
+          # observed in production for six hours. patches/06 removes the
+          # known cause; the heartbeat still catches the rest within the
+          # two minutes that check took - fifty seconds disconnected, a
+          # second to withhold the beat, thirty for it to go stale and
+          # three failures ten seconds apart, 111 s at worst - and now
+          # also catches a frozen server, which kept its connection.
+          # test/test_server_heartbeat.py holds these numbers to that.
           #
-          # Checking the bridge connection instead makes a wedge
-          # self-healing within roughly two minutes, for any cause,
-          # including ones not yet diagnosed. patches/06 removes the
-          # known deadlock; this is the backstop for the rest.
-          #
-          # failureThreshold is deliberately looser than readiness: a
-          # restart is disruptive, so tolerate a longer gap before
-          # resorting to one. The daemon reconnects within a second of
-          # a normal teardown, so six consecutive failures (~2 min)
-          # means genuinely stuck, not merely between connections.
+          # Thirty seconds is thirty missed beats. Three failures ten
+          # seconds apart then restart it. Bounded below as well as
+          # above, as for the bridge: after the clock steps backwards
+          # the heartbeat is dated in the future, and an upper bound
+          # alone would pass a wedged daemon until real time caught up.
           livenessProbe:
             exec:
-              command:
-                - /bin/bash
-                - -c
-                - "ss -Htn state established '( dport = :{{ .Values.bridge.ports.server }} )' | grep -q ."
-            # Liveness gets more startup grace than readiness (10s):
-            # the daemon must be given time to make its first connection
-            # before a failure counts towards a restart.
-            initialDelaySeconds: 60
-            periodSeconds: 20
-            failureThreshold: 6
+              command: ["/bin/bash", "-c", "a=$(( $(date +%s) - $(stat -c %Y /run/sigul_server.heartbeat) )) && test $a -ge -5 && test $a -le 30"]
+            periodSeconds: 10
+            failureThreshold: 3
           # Truest readiness signal: an ESTABLISHED connection to the
           # bridge's server-facing port.
           readinessProbe:
@@ -313,8 +312,10 @@ spec:
                 - /bin/bash
                 - -c
                 # -H suppresses the header line, which would otherwise
-                # satisfy grep even with no matching socket.
-                - "ss -Htn state established '( dport = :{{ .Values.bridge.ports.server }} )' | grep -q ."
+                # satisfy grep even with no matching socket. A fresh
+                # heartbeat too, so a frozen server stops receiving
+                # traffic as soon as it stops beating.
+                - "ss -Htn state established '( dport = :{{ .Values.bridge.ports.server }} )' | grep -q . && a=$(( $(date +%s) - $(stat -c %Y /run/sigul_server.heartbeat) )) && test $a -ge -5 && test $a -le 30"
             initialDelaySeconds: 10
             periodSeconds: 15
           volumeMounts:
