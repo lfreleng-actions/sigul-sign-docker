@@ -101,8 +101,9 @@ class BandwidthSqueeze(_ToxicFault):
     name = "net_bandwidth_squeeze"
     description = "Cap client->bridge throughput at 64 KB/s during large uploads."
     implication = (
-        "A slow uploader (a 64 MiB payload takes ~17 minutes at this rate) "
-        "holds the bridge's slot for the whole transfer with nothing bounding it."
+        "The bridge serves one request at a time, so a slow upload delays the "
+        "requests behind it for as long as it is slow; past the squeeze, the "
+        "slot stayed held after the client's link recovered."
     )
     proxy = PROXY_CLIENT
     toxic_type = "bandwidth"

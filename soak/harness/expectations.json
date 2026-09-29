@@ -41,8 +41,8 @@
         "issue": "https://github.com/lfreleng-actions/sigul-docker-k8s/issues/12 - patch 11 sheds a silent mid-request peer after 120 s; the bound is that plus slack"
       },
       "net_bandwidth_squeeze": {
-        "expect": "fail",
-        "issue": "https://github.com/lfreleng-actions/sigul-docker-k8s/issues/31 - a slow but steady client holds the bridge's only slot; intermittent, since it needs a large upload in flight when the squeeze starts"
+        "max_stall_seconds": 120,
+        "issue": "https://github.com/lfreleng-actions/sigul-docker-k8s/issues/31 - the bridge serves one request at a time, so a slow upload delays the requests behind it while it is slow; the bound is the 90 s squeeze plus the 30 s stall any fault may cause"
       }
     },
     "invariants": {}
