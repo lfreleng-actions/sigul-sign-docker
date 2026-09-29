@@ -358,7 +358,7 @@ The current images are CI/debug-oriented. For production:
 - Publish multi-arch (amd64/arm64) images to GHCR with digests pinned
   in the Helm values; the release workflow already builds both arches
   natively.
-- Pin `python-nss-ng` (already `1.2.2` in Dockerfiles) and normalize
+- Pin `python-nss-ng` (already `1.3.2` in Dockerfiles) and normalize
   the install script's fallback repo URL.
 
 ---
