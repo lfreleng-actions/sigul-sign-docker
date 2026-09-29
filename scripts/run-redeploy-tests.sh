@@ -152,6 +152,8 @@ mkdir -p test-artifacts
 # The name a checkout called sigul-docker-k8s gave the stack before the
 # compose file pinned one.
 LEGACY_PROJECT="sigul-docker-k8s"
+# The project the compose file pins; its volumes are named after it.
+PROJECT="sigul-docker"
 
 # A release from before #37, which kept the server's database and GnuPG
 # home on the container's writable layer. Its images run their own
@@ -315,7 +317,30 @@ else
     fail "a key created before the recreation was lost with the container"
 fi
 
-phase "4: the redeployed stack serves"
+phase "4: a clean removes volumes restored outside Compose"
+# restore-volumes.sh recreates volumes with docker volume create, so
+# they carry no Compose project label; a clean must remove them all the
+# same, or the server keeps an NSS database the new CA did not issue.
+restored="${PROJECT}_sigul_server_data"
+if docker compose -f docker-compose.sigul.yml --profile '*' down --volumes \
+            --remove-orphans --timeout 10 > test-artifacts/redeploy-restore.log 2>&1 \
+        && docker volume create "$restored" >/dev/null \
+        && docker run --rm --user 0 --entrypoint sh -v "${restored}:/v" \
+            "$SIGUL_SERVER_IMAGE" -c 'echo restored > /v/restored-marker'; then
+    pass "a data volume restored without Compose labels is in place"
+else
+    fail "could not stage a restored volume - see test-artifacts/redeploy-restore.log"
+fi
+if deploy restored --force-clean-volumes \
+        && ! docker exec sigul-server test -e /var/lib/sigul/server/restored-marker \
+        && [[ "$(docker volume inspect -f \
+            '{{index .Labels "com.docker.compose.project"}}' "$restored")" == "$PROJECT" ]]; then
+    pass "the clean replaced it with a fresh volume Compose owns"
+else
+    fail "the restored volume survived the clean - see test-artifacts/redeploy-restored.log"
+fi
+
+phase "5: the redeployed stack serves"
 if ./scripts/setup-client.sh >/dev/null && new_key_signs; then
     pass "a freshly provisioned client signs, and gpg verifies it"
 else

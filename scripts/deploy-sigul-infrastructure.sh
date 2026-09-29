@@ -1627,12 +1627,35 @@ manage_volumes() {
         return 1
     fi
 
+    # And by name, as for a foreign project: a volume restored with
+    # docker volume create carries no project label, and a clean that
+    # relied on Compose finding it would reuse its old database and NSS
+    # state if a Compose version found volumes by label alone.
+    local project declared key rc
+    project=$(compose_project_name || true)
+    if [[ -z "$project" ]] \
+            || ! declared=$(${compose_cmd} -f "${COMPOSE_FILE}" --profile '*' config --volumes); then
+        error "Could not read this project's volumes from ${COMPOSE_FILE}; the clean is incomplete"
+        return 1
+    fi
+    while IFS= read -r key; do
+        [[ -n "$key" ]] || continue
+        rc=0
+        _volume_state "${project}_${key}" || rc=$?
+        if [[ $rc -eq 0 ]] && ! _remove_confirmed "${project}_${key}"; then
+            error "Could not remove ${project}_${key}; the clean is incomplete"
+            return 1
+        elif [[ $rc -gt 1 ]]; then
+            error "Could not tell whether ${project}_${key} exists; the clean is incomplete"
+            return 1
+        fi
+    done <<< "$declared"
+
     # The client volumes are created by setup-client.sh with docker
     # volume create, outside Compose, so the project label does not
     # cover them. They hold a certificate issued by the CA just
     # destroyed, which the next CA would not trust.
     local volume
-    local rc
     for volume in sigul-docker_sigul_client_nss sigul-docker_sigul_client_config; do
         rc=0
         _volume_state "$volume" || rc=$?
