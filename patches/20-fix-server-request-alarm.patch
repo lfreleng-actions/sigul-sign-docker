@@ -1,0 +1,104 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 The Linux Foundation
+#
+# Time each request from its arrival. The request child's one-hour
+# alarm was armed at fork, before it had a request, so a request that
+# arrived late in an idle child's hour got only what was left of it -
+# on a quiet server one lasting d seconds was cut off with probability
+# of about d/3600 - and the kill was silent: the SystemExit it raised
+# was swallowed and the child reported success. The alarm is now armed
+# again when a request arrives, and a timeout during one is logged and
+# reported to the parent as _CHILD_TIMEOUT (#48). See patches/README.md.
+#
+--- a/src/server.py
++++ b/src/server.py
+@@ -116,7 +116,9 @@
+ MAX_FAST_RECONNECTIONS = 5
+ FAST_RECONNECTION_SECONDS = 5
+ SLOW_RECONNECTION_SECONDS = 60
+-# How long to wait for the request handler before killing it
++# How long a request child may wait for a request, and then how long it
++# may spend on one, before it is killed. The first bounds an idle child,
++# which is then replaced; the second is timed from the request's arrival.
+ CHILD_TIMEOUT_SECS = 60 * 60
+
+ # Infrastructure
+@@ -339,6 +341,7 @@
+         '''
+         proxy = ServerProxy(self.__client)
+         buf = proxy.stored_outer_read(utils.u32_size)
++        _request_arrived()
+         logging.debug('Started processing a request')
+         client_version = utils.u32_unpack(buf)
+         if client_version != utils.protocol_version:
+@@ -2949,12 +2952,58 @@
+         return _CHILD_BUG
+     logging.debug('Request handling finished')
+     return _CHILD_OK
++
++
++# The alarm is armed when the child is forked, and bounds a child that
++# never gets a request: it is then replaced. Once a request arrives the
++# alarm is armed again, so the request has all of CHILD_TIMEOUT_SECS
++# from its arrival rather than whatever the idle wait left. A child that
++# waited most of an hour otherwise cut off a request seconds in.
++_request_since = None
++_request_timed_out = False
++
+
++def _request_arrived():
++    '''Start timing the request that has just begun to arrive.'''
++    global _request_since
++    if _request_since is None:
++        _request_since = time.monotonic()
++        signal.alarm(CHILD_TIMEOUT_SECS)
+
++
+ def sigalarm_handler(*args):
++    global _request_timed_out
++    # Recorded here, not inferred from the exception: request code may
++    # catch SystemExit, or turn it into another error, on its way out.
++    _request_timed_out = _request_since is not None
+     sys.exit(_CHILD_TIMEOUT)
++
++
++def _run_request_child(config):
++    '''Run one request child: arm its alarm, handle one request.
+
++    Return the child's exit status. An alarm during a request is a
++    timeout, logged and reported as _CHILD_TIMEOUT so that the parent
++    says so too; one that ends an idle wait is routine and stays quiet.
+
++    '''
++    signal.signal(signal.SIGALRM, sigalarm_handler)
++    signal.alarm(CHILD_TIMEOUT_SECS)
++    try:
++        status = request_handling_child(config)
++    except SystemExit:
++        # The alarm fired outside request_handling_child's own handler,
++        # during its final cleanup, say. Judged below like any other.
++        status = _CHILD_OK
++    finally:
++        signal.alarm(0)
++    if _request_timed_out:
++        logging.warning('Request timed out after %d s and was killed',
++                        time.monotonic() - _request_since)
++        return _CHILD_TIMEOUT
++    return status
++
++
+ # The server's liveness heartbeat. The supervising parent rewrites it
+ # once a second while it runs, and the chart's liveness probe reads its
+ # age. Only the parent's own loop beats - no thread: it forks for every
+@@ -3162,10 +3211,7 @@
+                 child_pid = os.fork()
+                 if child_pid == 0:
+                     try:
+-                        # Kill the child process if it fails to finish in an hour
+-                        signal.signal(signal.SIGALRM, sigalarm_handler)
+-                        signal.alarm(CHILD_TIMEOUT_SECS)
+-                        status = request_handling_child(config)
++                        status = _run_request_child(config)
+                         logging.shutdown()
+                         os._exit(status)
+                     finally:

@@ -937,6 +937,46 @@ statuses still come back, orphans are still reaped, a child's exit ends
 the wait within a fraction of a slice, and the wait still works where
 no pidfd can be had.
 
+### 20-fix-server-request-alarm.patch
+
+**Status:** HIGH - legitimate requests fail at random, and silently
+**Upstream Status:** Local fork (upstream Sigul is unmaintained; see below)
+**Affects:** Server
+
+**Problem:**
+Each request child arms `signal.alarm(CHILD_TIMEOUT_SECS)`, an hour, as
+a backstop against a request that never ends. It was armed at fork,
+before the child had a request, and a child can wait most of that hour
+for the bridge to hand it one. A request arriving late in an idle
+child's hour got only what was left: on a quiet server one lasting *d*
+seconds was cut off with probability of about *d*/3600. With the alarm
+cut to 90 s for a test, a request reaching a 75 s old child was killed
+21 s in (#48). The kill was silent. `sigalarm_handler` raises
+`SystemExit(_CHILD_TIMEOUT)`, which `request_handling_child` catches
+and turns into `_CHILD_OK`: the parent's timeout branch was never
+reached, the server logged nothing, and the client saw only `Unexpected
+EOF in NSPR`.
+
+**Fix:**
+The fork-time alarm stays, as the bound on a child that never gets a
+request; that child is still replaced hourly, quietly, as before.
+`read_request` now arms the alarm again as the request's first bytes
+arrive, so every request has the full hour from its arrival. The alarm
+handler records whether a request was in progress, and
+`_run_request_child`, which now holds the child's alarm setup, reports
+a timeout during a request as `_CHILD_TIMEOUT` with a warning naming how
+long it ran, whatever became of the exception on its way out. The
+parent's existing timeout branch then logs it too.
+
+**Test:** `test/test_server_request_alarm.py` runs the real
+`request_handling_child` and `read_request` in a forked child over a
+fake bridge connection, with the alarm scaled to two seconds. A request
+arriving after most of the budget went on waiting still finishes; one
+overrunning its budget is killed on time and reported as a timeout, in
+the exit status and the log; an idle child is replaced on its bound
+without a report. Without the patch the first is cut off and the second
+exits 0 with nothing logged.
+
 ## Applying Patches
 
 The Docker build process automatically applies these patches:
