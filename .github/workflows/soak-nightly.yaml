@@ -175,6 +175,46 @@ jobs:
             docker tag "$ref" "${component}-linux-amd64-image:test"
           done
 
+      - name: 'Find the commit the images were built from'
+        id: images
+        shell: bash
+        run: |
+          # The chart has to suit the images, and this checkout's need
+          # not: it can already expect behaviour the published images
+          # only gain at the next release. A soak that started after
+          # the bridge heartbeat probe merged, but before images that
+          # write the heartbeat were published, never got the release
+          # up: the bridge failed a startup probe it could not pass.
+          # So install the chart the images were released with, found
+          # from the revision label every release image carries.
+          revisions=$(for component in client server bridge; do
+            docker image inspect --format \
+              '{{ index .Config.Labels "org.opencontainers.image.revision" }}' \
+              "${component}-linux-amd64-image:test"
+          done | sort -u)
+          if [[ "$revisions" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "Images built from ${revisions}"
+            echo "revision=${revisions}" >> "$GITHUB_OUTPUT"
+            echo "chart=${GITHUB_WORKSPACE}/release-chart/K8S/charts/sigul" \
+              >> "$GITHUB_OUTPUT"
+          else
+            # Images from before the label, or three that disagree.
+            echo "::warning::Images name no single source commit;" \
+              "installing this checkout's chart"
+            echo "chart=${GITHUB_WORKSPACE}/K8S/charts/sigul" \
+              >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: 'Check out the chart the images were released with'
+        if: steps.images.outputs.revision != ''
+        # yamllint disable-line rule:line-length
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          ref: ${{ steps.images.outputs.revision }}
+          path: 'release-chart'
+          sparse-checkout: 'K8S/charts/sigul'
+          persist-credentials: false
+
       - name: 'Install the harness dependencies'
         shell: bash
         run: |
@@ -205,9 +245,10 @@ jobs:
           # runs from soak/, so a relative path would not agree.
           SOAK_ADMIN_PASSWORD_FILE:
             '${{ github.workspace }}/test-artifacts/k8s-admin-password'
+          SOAK_K8S_CHART: ${{ steps.images.outputs.chart }}
         run: |
-          # kind ships with the runner image; the chart and the images
-          # come from this checkout, so nothing published is required.
+          # kind ships with the runner image; the images were pulled
+          # above, and the chart is the one they were released with.
           ./soak/k8s/deploy.sh
 
       - name: 'Run the Kubernetes soak profile'
@@ -278,6 +319,17 @@ jobs:
           name: 'soak-nightly-kubernetes'
           path: soak/results/
           retention-days: 90
+
+      - name: "Render this checkout's chart"
+        # The soak above installs the released chart, so render this
+        # one as well: no pull-request check does, and a template error
+        # should surface here before a release publishes it.
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          helm lint K8S/charts/sigul
+          helm template sigul K8S/charts/sigul --namespace sigul-soak \
+            > /dev/null
 
       - name: 'Clean up'
         if: always()

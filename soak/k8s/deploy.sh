@@ -23,6 +23,8 @@
 #   SOAK_K8S_CONTEXT    use this context, no kind   (default unset)
 #   SOAK_K8S_NAMESPACE  namespace                   (default sigul-soak)
 #   SOAK_K8S_RELEASE    helm release name           (default sigul)
+#   SOAK_K8S_CHART      chart directory to install  (default this
+#                       checkout's K8S/charts/sigul)
 #   SOAK_*_IMAGE        images to load and deploy
 
 set -euo pipefail
@@ -41,6 +43,11 @@ CLUSTER="${SOAK_K8S_CLUSTER:-soak-k8s}"
 NAMESPACE="${SOAK_K8S_NAMESPACE:-sigul-soak}"
 RELEASE="${SOAK_K8S_RELEASE:-sigul}"
 CONTEXT="${SOAK_K8S_CONTEXT:-}"
+# The chart has to suit the images. This checkout's does when the
+# images were built from it; published ones may be older than a chart
+# that already expects their successors' behaviour, so the scheduled
+# soak installs the chart they were released with instead.
+CHART="${SOAK_K8S_CHART:-${ROOT}/K8S/charts/sigul}"
 
 # Which kind cluster, if any, this script is responsible for. Teardown
 # branches on this rather than on whether a context is set, because
@@ -196,7 +203,7 @@ fi
 
 ### Release ###################################################
 
-log "installing ${RELEASE} into ${NAMESPACE}"
+log "installing ${RELEASE} into ${NAMESPACE} from ${CHART}"
 # Whether the release is already running decides if the workloads have
 # to be rolled below; asked before the upgrade, because afterwards the
 # answer is always yes.
@@ -234,7 +241,7 @@ else
 fi
 
 helm --kube-context "$CONTEXT" -n "$NAMESPACE" upgrade --install \
-    "$RELEASE" "${ROOT}/K8S/charts/sigul" \
+    "$RELEASE" "$CHART" \
     --values "${SCRIPT_DIR}/values.yaml" \
     --set "images.bridge.repository=${BRIDGE_IMAGE%:*}" \
     --set "images.bridge.tag=${BRIDGE_IMAGE##*:}" \
