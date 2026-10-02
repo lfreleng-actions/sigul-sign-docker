@@ -61,6 +61,20 @@ MIN_TREND_SPAN_SECONDS = 600.0
 MAX_FD_GROWTH = 10
 MAX_CLOSE_WAIT_END = 1
 
+#: Samples at the end of cooldown that a zombie must appear in, every
+#: one of them, to count as left behind: twelve, a minute at the
+#: sampler's interval. The cooldown is still under load, and since
+#: patch 19 the server waits for its request child a second at a time,
+#: reaping orphans between slices - so the gpg helpers a signing
+#: request orphans stay zombies for up to a second, and about a third
+#: of samples catch up to a dozen on their way out. Across every
+#: nightly since, no more than five samples in a row held one. A
+#: zombie that nobody will reap is in every sample from the moment it
+#: appears, so the fewest seen over the window is what was left
+#: behind, and a transient cannot reach it however unluckily the
+#: samples fall.
+ZOMBIE_WINDOW_SAMPLES = 12
+
 
 def _sustained_growth_check(unit: str, res: UnitResources) -> Check:
     """Whether a daemon kept growing once it had time to settle.
@@ -141,7 +155,8 @@ def resource_checks(results: Results) -> list[Check]:
             Check(
                 f"{unit}: no zombie processes",
                 res.zombies_end == 0,
-                f"median of last 3 samples={res.zombies_end} (peak {res.zombies_max})",
+                f"fewest in the last {ZOMBIE_WINDOW_SAMPLES} samples="
+                f"{res.zombies_end} (peak {res.zombies_max})",
             )
         )
     return checks

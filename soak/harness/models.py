@@ -89,11 +89,12 @@ class UnitResources:
     close_wait_end: int
     fin_wait_2_max: int
     zombies_max: int
-    #: Zombies at the end of cooldown, the median of the last three
-    #: samples. A reaping parent leaves a zombie for the moments between
-    #: a child exiting and its next wait(), and the cooldown is still
-    #: under load, so any single sample can catch that transient; two
-    #: of three positive means something is accumulating.
+    #: Zombies left behind at the end of cooldown: the fewest seen in
+    #: any of its last ZOMBIE_WINDOW_SAMPLES samples. A reaping parent
+    #: leaves a zombie for the moments between a child exiting and its
+    #: next wait(), and the cooldown is still under load, so any one
+    #: sample - or two of three - can catch that transient. Only a
+    #: zombie nobody reaps is in all of them.
     zombies_end: int
     samples: int
     #: Distinct container lifetimes seen from the start of the baseline

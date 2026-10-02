@@ -84,7 +84,8 @@ bridge, blackholed link) is judged on recovery alone.
 30 MB/h from a fit over the span from the first baseline sample to
 the last cooldown one (judged only when that span is at least ten
 minutes, and reported otherwise); descriptors and CLOSE-WAIT
-sockets back to where they were in the baseline phase; no zombies; no
+sockets back to where they were in the baseline phase; no zombie
+still present through the last minute of cooldown; no
 restart of either daemon between baseline and cooldown, since that
 would reset everything the comparison measures; and each daemon
 sampled through the run and through both clean phases, so a silent
