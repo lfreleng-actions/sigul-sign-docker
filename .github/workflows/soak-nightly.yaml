@@ -2,21 +2,27 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: 2026 The Linux Foundation
 
-name: 'Sigul Soak (nightly) 🌙'
+name: 'Sigul Soak (weekly) 🌙'
 
 # Hours of load with every fault repeated, against the published
 # images. Long enough for slow leaks to become unambiguous trends and
 # for the faults with long recovery paths to be exercised many times.
 # The PR job runs the short profile against unpublished PR images;
-# this one runs the long profile against what is actually deployed.
+# this one runs the long profile (still named "nightly" in the harness)
+# against what is actually deployed.
+#
+# Weekly rather than nightly: the PR gate already soaks every change,
+# and the published images change only on release, so a daily run
+# mostly re-measured the same images while costing nine runner-hours.
 #
 # workflow_dispatch takes an image tag so any two releases can be
 # compared, or a release candidate soaked before it is tagged latest.
 
 on:  # yamllint disable-line rule:truthy
   schedule:
-    # 02:17 UTC daily; off the hour to avoid the top-of-hour rush.
-    - cron: '17 2 * * *'
+    # 04:00 UTC on Mondays. The run takes about four and a half hours,
+    # so its result is in by the start of the working week.
+    - cron: '0 4 * * 1'
   workflow_dispatch:
     inputs:
       image_tag:
@@ -137,7 +143,7 @@ jobs:
     permissions:
       contents: read
     timeout-minutes: 60
-    # Nightly only, deliberately. The pull-request gate's value is fast
+    # Scheduled only, deliberately. The pull-request gate's value is fast
     # feedback on the daemons, and Compose gives that in thirty
     # minutes; standing up a cluster and rolling pods through their
     # controllers is slower and answers a different question - whether
