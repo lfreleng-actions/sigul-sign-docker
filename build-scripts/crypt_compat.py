@@ -17,13 +17,7 @@ import sys
 if sys.version_info >= (3, 13):
     # Python 3.13+ - use passlib for crypt functionality
     try:
-        # passlib ships no type information, so every symbol reached
-        # through it is Unknown to the type checker. Suppressed at the
-        # point of use rather than repo-wide, so the strict settings
-        # keep applying to everything else.
-        from passlib.hash import (
-            sha512_crypt,  # pyright: ignore[reportUnknownVariableType]
-        )
+        from passlib.hash import sha512_crypt
     except ImportError as exc:
         raise ImportError(
             "passlib is required for crypt module compatibility in "
@@ -94,7 +88,10 @@ if sys.version_info >= (3, 13):
             salt_value = parts[2]
 
         # Use passlib to generate the hash
-        # passlib's sha512_crypt.hash() returns the full crypt string
+        # passlib's sha512_crypt.hash() returns the full crypt string.
+        # types-passlib leaves the handler mixins' using() unannotated,
+        # so the chain below stays Unknown to the type checker;
+        # suppressed here rather than repo-wide.
         return sha512_crypt.using(  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
             rounds=rounds, salt=salt_value
         ).hash(word)
@@ -104,9 +101,10 @@ else:
     # We list names explicitly rather than `from crypt import *` to keep
     # the public surface of this shim explicit and to satisfy
     # basedpyright's reportWildcardImportFromLibrary.  This branch is
-    # unreachable at the pythonVersion the project type-checks against
-    # (3.14, matching the Fedora 44 image) but is preserved as a runtime
-    # fallback for older interpreters; suppress the resulting
+    # unreachable at the pythonVersion this module is type-checked
+    # against (3.14, matching the Fedora 44 image; see the
+    # executionEnvironments in pyrightconfig.json) but is preserved as
+    # a runtime fallback for older interpreters; suppress the resulting
     # reportUnreachable on the import line.
     from crypt import (  # pyright: ignore[reportUnreachable]  # noqa: F401
         METHOD_CRYPT,

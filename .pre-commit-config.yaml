@@ -7,7 +7,10 @@ ci:
   # pre-commit.ci sandbox prevents network calls; disable gha-workflow-linter.
   # aislop also runs engines that can call the network at scan time
   # (dependency audits), so it cannot run in the sandbox either.
-  skip: [gha-workflow-linter, aislop]
+  # basedpyright needs the typing modules of the packages the code
+  # imports, and any additional_dependencies exceed pre-commit.ci's
+  # 250 MiB per-hook limit (the bare hook alone is 248.7 MiB).
+  skip: [gha-workflow-linter, aislop, basedpyright]
   autofix_commit_msg: |
     Chore: pre-commit autofixes
 
@@ -139,6 +142,66 @@ repos:
     rev: 706e6acebe9e88c2c28d1527d3085a14b11794c4  # frozen: 1.40.1
     hooks:
       - id: basedpyright
+        # Configured in pyrightconfig.json, not pyproject.toml: aislop
+        # treats any root pyproject.toml as a Python manifest and then
+        # flags undeclared imports (passlib, crypt) in build-scripts/,
+        # and this repository declares no Python project to list them.
+        # That file stays plain JSON, because the check-json hook validates
+        # it strictly (basedpyright itself would accept comments), so its
+        # settings are explained here:
+        # - pythonVersion 3.12: the oldest interpreter that runs checked
+        #   code, the ubuntu-latest (24.04) system python3 that runs
+        #   soak/harness in soak-nightly and pin-chart-images.py in
+        #   release.
+        # - typeCheckingMode "all": stricter than the org's "standard";
+        #   kept from the previous configuration.
+        # - include: the same directories as the args below. tests/ and
+        #   scripts/ hold only shell; test/fixtures/ holds no Python.
+        # - executionEnvironments: each root is also the import root for
+        #   its files (the chart scripts import their siblings; the
+        #   harness runs as `python -m harness` from soak/). Chart
+        #   scripts, crypt_compat.py and test/ run only inside the
+        #   Fedora 44 images, so are checked at Python 3.14.
+        # - reportMissingImports off for test/ only: those scripts run
+        #   inside the images and import Sigul's own modules (not on
+        #   PyPI) and python-nss-ng (Linux manylinux_2_38 wheels only,
+        #   so no hook environment can install it on macOS).
+        # Analyse the whole scope, not just the staged files: a change
+        # in one file can introduce a diagnostic in an unchanged one.
+        pass_filenames: false
+        # Run even when no Python file is staged (deletions, config).
+        always_run: true
+        # Keep always_run from also firing at commit-msg.
+        stages: [pre-commit]
+        args:
+          # Fail on warnings as well as errors.
+          - --warnings
+          # The same directories as `include` in pyrightconfig.json.
+          - K8S/charts/sigul/files/scripts
+          - build-scripts
+          - soak
+          - test
+        # Packages the checked code imports, plus their typing stubs,
+        # so every import outside test/ resolves.  Each pin is the
+        # version that runs that code, so the hook checks the real API:
+        # - docker, locust, matplotlib: soak/requirements.txt, which the
+        #   soak image and soak-nightly's host venv install.
+        # - passlib: the images' `pip3 install passlib==1.7.4`.
+        # - requests: the Fedora 44 python3-requests RPM the images
+        #   install (2.33.1).  It ships no inline types; 2.34 does.
+        # - types-*: the stubs release for that same API (typeshed:
+        #   requests ~=2.33.0, docker 7.2.*, passlib 1.7.*).  The
+        #   passlib stubs are final; typeshed has removed them.
+        # Bump each pin with its runtime, not on its own.
+        additional_dependencies:
+          - docker==7.2.0
+          - locust==2.46.5
+          - matplotlib==3.11.2
+          - passlib==1.7.4
+          - requests==2.33.1
+          - types-docker==7.2.0.20260923
+          - types-passlib==1.7.7.20260211
+          - types-requests==2.33.0.20260906
 
   - repo: https://github.com/lfreleng-actions/gha-workflow-linter
     rev: 0c582e431022f1c7004196fb4ea32744d1fe4843  # frozen: v1.7.0
