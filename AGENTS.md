@@ -39,5 +39,5 @@ No pull-request check renders the Helm chart. The `check-yaml` and
 tag-triggered release workflow, after the images publish. Before
 pushing a change under `K8S/charts/sigul/`, run the two commands in
 the chart README's "Quick validation" section. A template error
-otherwise first fails the nightly soak, or a release that has already
+otherwise first fails the weekly soak, or a release that has already
 published its images.

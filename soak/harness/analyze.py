@@ -52,6 +52,7 @@ from .models import (
     TaskStats,
     UnitResources,
 )
+from .resource_checks import ZOMBIE_WINDOW_SAMPLES
 from .stats import Run, percentile, slope_per_hour, task_stats
 
 #: Default bound on recovery: seconds from the end of a fault window to
@@ -272,7 +273,7 @@ def _unit_resources(
         close_wait_end=int(tail[-1]["close_wait"]),
         fin_wait_2_max=max(int(r["fin_wait_2"]) for r in rows),
         zombies_max=max(int(r["zombies"]) for r in rows),
-        zombies_end=int(statistics.median(int(r["zombies"]) for r in tail[-3:])),
+        zombies_end=min(int(r["zombies"]) for r in tail[-ZOMBIE_WINDOW_SAMPLES:]),
         samples=len(rows),
         restarts_in_window=max(0, len(lifetimes) - 1),
         span_seconds=round(span_hi - span_lo, 1),
