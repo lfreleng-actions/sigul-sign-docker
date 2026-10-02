@@ -1,12 +1,29 @@
 {
-  "pythonVersion": "3.14",
+  "pythonVersion": "3.12",
+  "pythonPlatform": "All",
   "typeCheckingMode": "all",
-  "reportMissingImports": "none",
-  "reportMissingModuleSource": "none",
-  "reportMissingTypeStubs": "none",
+  "include": [
+    "K8S/charts/sigul/files/scripts",
+    "build-scripts",
+    "soak",
+    "test"
+  ],
   "executionEnvironments": [
     {
-      "root": "K8S/charts/sigul/files/scripts"
+      "root": "K8S/charts/sigul/files/scripts",
+      "pythonVersion": "3.14"
+    },
+    {
+      "root": "build-scripts/crypt_compat.py",
+      "pythonVersion": "3.14"
+    },
+    {
+      "root": "soak"
+    },
+    {
+      "root": "test",
+      "pythonVersion": "3.14",
+      "reportMissingImports": "none"
     }
   ]
 }
